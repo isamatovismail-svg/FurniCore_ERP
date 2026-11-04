@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --furni-primary: #173B35;
+  --furni-secondary: #285F4D;
+  --furni-bg: #F4F6F3;
+  --furni-text: #252D29;
+}
+
+body {
+  background-color: var(--furni-bg);
+  color: var(--furni-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for modern industrial feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #EAEFE9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #A4B3A8;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #63736C;
+}
