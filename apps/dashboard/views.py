@@ -113,10 +113,10 @@ def index(request):
 
     # 4. Production orders
     active_production = ProductionOrder.objects.filter(
-        status=ProductionOrderStatus.IN_PROGRESS
+        status__in=[ProductionOrderStatus.IN_PROGRESS, ProductionOrderStatus.MATERIALS_RESERVED]
     ).count()
     planned_production = ProductionOrder.objects.filter(
-        status=ProductionOrderStatus.PLANNED
+        status__in=[ProductionOrderStatus.DRAFT, ProductionOrderStatus.WAITING, ProductionOrderStatus.CHECKING_MATERIALS]
     ).count()
     completed_production = ProductionOrder.objects.filter(
         status=ProductionOrderStatus.COMPLETED

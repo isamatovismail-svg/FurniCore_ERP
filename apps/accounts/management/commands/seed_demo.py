@@ -328,9 +328,65 @@ class Command(BaseCommand):
             Expense.objects.create(**ed)
         self.stdout.write(f'  ✓ Создано {len(expenses_data)} записей расходов')
 
-        # ── 10. PRODUCTION ORDERS ─────────────────────────────────────────
-        self.stdout.write('Создание производственных заказов...')
-        from apps.production.models import ProductionOrder, ProductionOrderStatus, ProductionStage, StageStatus
+        # ── 10. BOM & PRODUCTION ORDERS ──────────────────────────────────
+        self.stdout.write('Создание технологических карт (BOM) и производственных заказов...')
+        from apps.production.models import (
+            ProductionOrder, ProductionOrderStatus, ProductionStage, StageStatus,
+            BOM, BOMItem, RoutingTemplate
+        )
+        from apps.production.services import ensure_default_routing_templates
+        ensure_default_routing_templates()
+
+        mats_by_sku = {m.sku: m for m in Material.objects.all()}
+
+        # Создаём спецификации BOM для демонстрационных изделий
+        wardrobe_rt = RoutingTemplate.objects.filter(category='WARDROBE').first()
+        kitchen_rt = RoutingTemplate.objects.filter(category='KITCHEN').first()
+
+        bom_wardrobe, _ = BOM.objects.get_or_create(
+            product=created_products[0],
+            name='Базовая спецификация (Шкаф-купе «Классик»)',
+            defaults={
+                'version': '1.0',
+                'routing_template': wardrobe_rt,
+                'standard_labor_hours': Decimal('16.0'),
+                'labor_rate_hourly_kzt': Decimal('2500.00'),
+                'overhead_rate_kzt': Decimal('10000.00'),
+                'is_active': True,
+                'description': 'Нормы расхода ЛДСП, профиля и фурнитуры для 3-дверного шкафа',
+            }
+        )
+        if bom_wardrobe.items.count() == 0 and 'MAT-001' in mats_by_sku:
+            BOMItem.objects.create(bom=bom_wardrobe, material=mats_by_sku['MAT-001'], quantity_planned=Decimal('4.0'), unit='лист', waste_percent=Decimal('8.0'), notes='Корпус и полки')
+            if 'MAT-015' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_wardrobe, material=mats_by_sku['MAT-015'], quantity_planned=Decimal('2.0'), unit='лист', waste_percent=Decimal('5.0'), notes='Задняя стенка ХДФ')
+            if 'MAT-006' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_wardrobe, material=mats_by_sku['MAT-006'], quantity_planned=Decimal('48.0'), unit='шт', waste_percent=Decimal('2.0'), notes='Конфирматы 5x50')
+            if 'MAT-008' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_wardrobe, material=mats_by_sku['MAT-008'], quantity_planned=Decimal('3.0'), unit='компл', waste_percent=Decimal('0.0'), notes='Ручки профильные')
+
+        bom_kitchen, _ = BOM.objects.get_or_create(
+            product=created_products[1],
+            name='Стандартная комплектация кухни 2.4м',
+            defaults={
+                'version': '1.0',
+                'routing_template': kitchen_rt,
+                'standard_labor_hours': Decimal('28.0'),
+                'labor_rate_hourly_kzt': Decimal('2800.00'),
+                'overhead_rate_kzt': Decimal('15000.00'),
+                'is_active': True,
+                'description': 'Комплект модулей, столешница, петли с доводчиками Blum',
+            }
+        )
+        if bom_kitchen.items.count() == 0 and 'MAT-001' in mats_by_sku:
+            BOMItem.objects.create(bom=bom_kitchen, material=mats_by_sku['MAT-001'], quantity_planned=Decimal('6.0'), unit='лист', waste_percent=Decimal('7.0'), notes='Корпуса шкафов')
+            if 'MAT-003' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_kitchen, material=mats_by_sku['MAT-003'], quantity_planned=Decimal('3.0'), unit='лист', waste_percent=Decimal('5.0'), notes='Фасады МДФ')
+            if 'MAT-007' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_kitchen, material=mats_by_sku['MAT-007'], quantity_planned=Decimal('16.0'), unit='шт', waste_percent=Decimal('0.0'), notes='Петли Blum 110')
+            if 'MAT-009' in mats_by_sku:
+                BOMItem.objects.create(bom=bom_kitchen, material=mats_by_sku['MAT-009'], quantity_planned=Decimal('4.0'), unit='компл', waste_percent=Decimal('0.0'), notes='Направляющие Boyard')
+
         prod_manager_user = created_users.get('prod_manager')
         prod_employees = list(Employee.objects.filter(department=Department.PRODUCTION))
 
@@ -345,7 +401,7 @@ class Command(BaseCommand):
         po_data = [
             dict(order_number='PO-2026-001', product=created_products[0], status=ProductionOrderStatus.COMPLETED,  qty=2, offset=50),
             dict(order_number='PO-2026-002', product=created_products[2], status=ProductionOrderStatus.IN_PROGRESS, qty=1, offset=10),
-            dict(order_number='PO-2026-003', product=created_products[1], status=ProductionOrderStatus.PLANNED,     qty=1, offset=5),
+            dict(order_number='PO-2026-003', product=created_products[1], status=ProductionOrderStatus.WAITING,     qty=1, offset=5),
             dict(order_number='PO-2026-004', product=created_products[4], status=ProductionOrderStatus.IN_PROGRESS, qty=2, offset=7),
         ]
         for pod in po_data:
@@ -353,9 +409,11 @@ class Command(BaseCommand):
                 continue
             import datetime as dt
             start = today - dt.timedelta(days=pod['offset'])
+            order_bom = bom_wardrobe if pod['product'] == created_products[0] else (bom_kitchen if pod['product'] == created_products[1] else None)
             po = ProductionOrder.objects.create(
                 order_number=pod['order_number'],
                 product=pod['product'],
+                bom=order_bom,
                 quantity_planned=Decimal(str(pod['qty'])),
                 status=pod['status'],
                 planned_start=start,

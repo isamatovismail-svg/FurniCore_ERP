@@ -1,0 +1,153 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Новая технологическая карта (BOM) — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6" x-data="{
+  items: [
+    { material_id: '', quantity: '1.0', unit: 'шт', waste: '5.0', notes: '' }
+  ],
+  addItem() {
+    this.items.push({ material_id: '', quantity: '1.0', unit: 'шт', waste: '5.0', notes: '' });
+  },
+  removeItem(index) {
+    if (this.items.length > 1) {
+      this.items.splice(index, 1);
+    }
+  }
+}">
+
+  <!-- Навигация -->
+  <div class="flex items-center gap-3">
+    <a href="{% url 'production:boms_list' %}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#173B35] hover:underline">
+      ← Все спецификации
+    </a>
+    <span class="text-gray-300">/</span>
+    <span class="text-xs font-bold text-gray-600">Новая техкарта (BOM)</span>
+  </div>
+
+  <div class="fc-card p-6">
+    <div class="pb-4 mb-5 border-b border-gray-100">
+      <h1 class="text-lg font-bold text-[#252D29]">Конструктор технологической карты (BOM)</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Определение состава сырья, фурнитуры, норм расхода, технологических отходов и ставок оплаты</p>
+    </div>
+
+    <form method="post" class="space-y-6">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
+        {{ form.non_field_errors }}
+      </div>
+      {% endif %}
+
+      <!-- Основные параметры спецификации -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Изделие мебели *</label>
+          {{ form.product }}
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Вариант исполнения</label>
+          {{ form.variant }}
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Название технологической карты *</label>
+          {{ form.name }}
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Версия спецификации *</label>
+          {{ form.version }}
+        </div>
+
+        <div class="sm:col-span-3">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Шаблон технологического маршрута</label>
+          {{ form.routing_template }}
+        </div>
+      </div>
+
+      <!-- Нормативы труда и накладные расходы -->
+      <div class="p-4 bg-gray-50/70 rounded-xl border border-gray-200/80 space-y-3">
+        <h2 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Нормативы трудоёмкости и накладных расходов</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-600 mb-1">Нормо-часы на 1 шт *</label>
+            {{ form.standard_labor_hours }}
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-600 mb-1">Ставка часа (₸/ч)</label>
+            {{ form.labor_rate_hourly_kzt }}
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-gray-600 mb-1">Накладные расходы (₸/ед)</label>
+            {{ form.overhead_rate_kzt }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Состав материалов (Динамический конструктор строк) -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-[#252D29]">Спецификация материалов и комплектующих</h2>
+          <button type="button" @click="addItem()" class="fc-btn-secondary text-xs py-1 px-3">
+            + Добавить позицию
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <template x-for="(item, index) in items" :key="index">
+            <div class="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+              <span class="text-xs font-bold text-gray-400 w-5" x-text="index + 1"></span>
+              
+              <div class="flex-1 min-w-[200px]">
+                <select name="material_id[]" x-model="item.material_id" class="fc-input text-xs py-1" required>
+                  <option value="">-- Выберите материал --</option>
+                  {% for m in materials %}
+                  <option value="{{ m.id }}">{{ m.name }} ({{ m.sku }}) — {{ m.purchase_cost_kzt }} ₸</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="w-20">
+                <input type="number" step="0.001" name="quantity_planned[]" x-model="item.quantity" placeholder="Кол-во" class="fc-input text-xs py-1 font-bold text-center" required>
+              </div>
+
+              <div class="w-16">
+                <input type="text" name="unit[]" x-model="item.unit" placeholder="Ед." class="fc-input text-xs py-1 text-center font-mono">
+              </div>
+
+              <div class="w-20" title="Технологический отход в %">
+                <input type="number" step="0.5" name="waste_percent[]" x-model="item.waste" placeholder="Отход %" class="fc-input text-xs py-1 text-center font-mono text-rose-600">
+              </div>
+
+              <div class="flex-1 min-w-[120px]">
+                <input type="text" name="notes[]" x-model="item.notes" placeholder="Примечание..." class="fc-input text-xs py-1">
+              </div>
+
+              <button type="button" @click="removeItem(index)" class="text-rose-500 hover:text-rose-700 p-1" title="Удалить строку">
+                ✕
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {{ form.is_active }}
+        <label class="text-xs font-semibold text-gray-700">Сделать эту версию основной активной спецификацией</label>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-5 border-t border-gray-100">
+        <a href="{% url 'production:boms_list' %}" class="fc-btn-secondary text-xs py-2 px-4">Отмена</a>
+        <button type="submit" class="fc-btn-primary text-xs py-2 px-6 font-bold shadow-2xs">
+          Сохранить спецификацию BOM
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

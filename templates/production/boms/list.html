@@ -1,0 +1,81 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Технологические карты (BOM) — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Заголовок -->
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-[#252D29]">📑 Технологические карты мебели (BOM)</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Спецификации материалов, фурнитуры, трудоёмкости и норм расхода</p>
+    </div>
+    {% if can_manage %}
+    <div class="flex gap-2">
+      <a href="{% url 'production:bom_create' %}" class="fc-btn-primary text-xs flex items-center gap-1.5 shadow-2xs">
+        + Создать техкарту
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="fc-card p-4">
+    {% if boms %}
+    <div class="overflow-x-auto">
+      <table class="fc-table w-full text-xs">
+        <thead>
+          <tr>
+            <th>Название техкарты</th>
+            <th>Изделие</th>
+            <th>Версия</th>
+            <th>Позиций сырья</th>
+            <th>Трудоёмкость</th>
+            <th>Плановая себестоимость</th>
+            <th>Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bom in boms %}
+          <tr>
+            <td class="font-semibold text-[#252D29]">
+              <a href="{% url 'production:bom_detail' bom.pk %}" class="text-[#173B35] hover:underline">
+                {{ bom.name }}
+              </a>
+            </td>
+            <td>
+              <span class="font-medium text-gray-800">{{ bom.product.name }}</span>
+              {% if bom.variant %}<span class="text-gray-400 text-[10px]">({{ bom.variant.name }})</span>{% endif %}
+            </td>
+            <td><span class="font-mono bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-[11px]">v{{ bom.version }}</span></td>
+            <td class="text-center font-bold text-gray-700">{{ bom.items_count }} поз.</td>
+            <td>{{ bom.standard_labor_hours }} ч</td>
+            <td class="font-mono font-bold text-[#173B35]">{{ bom.total_planned_cost_kzt|intcomma }} ₸</td>
+            <td>
+              {% if bom.is_active %}
+                <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">Активна</span>
+              {% else %}
+                <span class="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">Архив</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'production:bom_detail' bom.pk %}" class="text-[#173B35] font-semibold hover:underline">
+                Открыть →
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-10 text-gray-400 text-xs">
+      Технологических карт ещё нет. Создайте первую спецификацию.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

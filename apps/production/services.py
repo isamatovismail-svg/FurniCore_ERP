@@ -164,11 +164,25 @@ def check_materials_availability(order: ProductionOrder) -> dict:
 
     can_launch = (total_deficit_count == 0)
 
+    possible_units_list = []
+    for item_data in items_analysis:
+        single_need = item_data['total_required'] / batch_multiplier if batch_multiplier > 0 else Decimal('1')
+        if single_need > 0:
+            possible_units_list.append(item_data['current_stock'] // single_need)
+        item_data['required_qty'] = item_data['total_required']
+        item_data['stock_qty'] = item_data['current_stock']
+        item_data['shortage_qty'] = item_data['deficit']
+
+    possible_units = min(possible_units_list) if possible_units_list else Decimal('0')
+
     return {
         'can_launch': can_launch,
+        'is_all_available': can_launch,
         'items': items_analysis,
+        'materials': items_analysis,
         'total_deficit_count': total_deficit_count,
         'planned_materials_cost': total_planned_cost,
+        'possible_units': possible_units,
     }
 
 
@@ -277,7 +291,8 @@ def issue_materials_for_production(order: ProductionOrder, user=None) -> Warehou
         doc.save(update_fields=['total_amount_kzt'])
 
         # Проведение складского документа через проверенный транзакционный сервис
-        post_document(doc, user=user)
+        doc = post_document(doc, user=user)
+        doc.refresh_from_db()
 
         # Обновление показателей себестоимости и статуса заказа
         ord_locked.planned_materials_cost_kzt = total_doc_cost
@@ -606,7 +621,8 @@ def complete_and_transfer_to_warehouse(order: ProductionOrder, user=None) -> War
         )
 
         # Проводим складской документ (пополняет остаток на WH-2)
-        post_document(doc, user=user)
+        doc = post_document(doc, user=user)
+        doc.refresh_from_db()
 
         # Финализируем заказ
         ord_locked.status = ProductionOrderStatus.COMPLETED

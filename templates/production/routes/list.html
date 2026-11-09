@@ -1,0 +1,53 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Маршруты производства мебели — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Заголовок -->
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-[#252D29]">🛤️ Технологические маршруты фабрики</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Типовые цепочки операций для каждой категории корпусной и мягкой мебели</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'production:boms_list' %}" class="fc-btn-secondary text-xs">Техкарты (BOM)</a>
+      <a href="{% url 'production:index' %}" class="fc-btn-primary text-xs">Заказы в цеху</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    {% for tpl in templates %}
+    <div class="fc-card p-5 border-t-4 border-[#173B35]">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-sm font-bold text-[#252D29]">{{ tpl.name }}</h2>
+        <span class="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          {{ tpl.get_category_display }}
+        </span>
+      </div>
+      <p class="text-xs text-gray-500 mb-4">{{ tpl.description|default:"Стандартная технологическая цепочка" }}</p>
+
+      <!-- Список шагов маршрута -->
+      <div class="space-y-2">
+        {% for step in tpl.stages.all %}
+        <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 text-xs border border-gray-100">
+          <div class="flex items-center gap-2.5">
+            <span class="w-5 h-5 rounded-full bg-[#173B35] text-white text-[10px] font-bold flex items-center justify-center">
+              {{ step.sequence }}
+            </span>
+            <div>
+              <span class="font-semibold text-gray-800">{{ step.stage_name }}</span>
+              <span class="text-[10px] text-gray-400 block">{{ step.workstation|default:"Участок цеха" }}</span>
+            </div>
+          </div>
+          <span class="font-mono text-gray-600 font-medium">{{ step.standard_hours }} ч</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

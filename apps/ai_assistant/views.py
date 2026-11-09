@@ -36,7 +36,7 @@ def index(request):
 
             elif any(w in q_lower for w in ['производств', 'заказ', 'цех', 'этап']):
                 active = ProductionOrder.objects.filter(status='IN_PROGRESS').count()
-                planned = ProductionOrder.objects.filter(status='PLANNED').count()
+                planned = ProductionOrder.objects.filter(status='WAITING').count()
                 reply = f"В производственном цехе сейчас в работе: {active} заказа(ов), запланировано к запуску: {planned}. Среднее соблюдение сроков: 95%."
 
             elif any(w in q_lower for w in ['выручк', 'прибыл', 'финанс', 'доход']):

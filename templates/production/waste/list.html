@@ -1,0 +1,89 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Журнал брака и отходов — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Заголовок -->
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-[#252D29]">⚠️ Журнал брака и отходов</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Учёт дефектов, исправимого брака, технологических отходов и ущерба</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'production:index' %}" class="fc-btn-secondary text-xs">Все заказы</a>
+      <a href="{% url 'production:board' %}" class="fc-btn-primary text-xs">Канбан-доска</a>
+    </div>
+  </div>
+
+  <!-- KPI брака -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="fc-card p-4 border-l-4 border-rose-500">
+      <p class="text-2xl font-mono font-bold text-rose-600">{{ total_damage_kzt|intcomma }} ₸</p>
+      <p class="text-xs text-gray-500 mt-0.5">Совокупная сумма потерь от брака и отходов</p>
+    </div>
+    <div class="fc-card p-4 border-l-4 border-amber-400">
+      <p class="text-2xl font-bold text-amber-600">{{ total_incidents }}</p>
+      <p class="text-xs text-gray-500 mt-0.5">Всего зафиксировано инцидентов</p>
+    </div>
+  </div>
+
+  <!-- Таблица записей -->
+  <div class="fc-card p-5">
+    {% if wastes %}
+    <div class="overflow-x-auto">
+      <table class="fc-table w-full text-xs">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Заказ</th>
+            <th>Изделие</th>
+            <th>Тип инцидента</th>
+            <th>Материал</th>
+            <th>Количество</th>
+            <th>Ущерб (₸)</th>
+            <th>Причина</th>
+            <th>Решение</th>
+            <th>Мастер</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in wastes %}
+          <tr>
+            <td class="font-mono text-gray-500">{{ w.created_at|date:"d.m.y H:i" }}</td>
+            <td class="font-mono font-bold">
+              <a href="{% url 'production:detail' w.production_order.pk %}" class="text-[#173B35] hover:underline">
+                {{ w.production_order.order_number }}
+              </a>
+            </td>
+            <td class="font-medium text-gray-800">{{ w.production_order.product.name }}</td>
+            <td>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full
+                {% if w.waste_type == 'IRREPARABLE_DEFECT' %}bg-red-100 text-red-800
+                {% elif w.waste_type == 'REWORKABLE_DEFECT' %}bg-amber-100 text-amber-800
+                {% else %}bg-gray-100 text-gray-700{% endif %}">
+                {{ w.get_waste_type_display }}
+              </span>
+            </td>
+            <td>{{ w.material.name|default:"—" }}</td>
+            <td class="font-bold">{{ w.quantity }} {{ w.unit }}</td>
+            <td class="font-mono font-bold text-rose-600">{{ w.cost_kzt|intcomma }} ₸</td>
+            <td class="text-gray-600 max-w-xs truncate">{{ w.reason|default:"—" }}</td>
+            <td class="text-gray-600 max-w-xs truncate">{{ w.decision|default:"—" }}</td>
+            <td class="text-gray-500">{{ w.reported_by.get_full_name_ru|default:w.reported_by.username }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-10 text-gray-400 text-xs">
+      Записей о браке и технологических отходах не зафиксировано.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

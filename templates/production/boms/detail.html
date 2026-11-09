@@ -1,0 +1,110 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}{{ bom.name }} v{{ bom.version }} — Техкарта (BOM){% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Навигация -->
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+      <a href="{% url 'production:boms_list' %}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#173B35] hover:underline">
+        ← Все спецификации BOM
+      </a>
+      <span class="text-gray-300">/</span>
+      <span class="text-xs font-bold text-gray-600">{{ bom.name }} (v{{ bom.version }})</span>
+    </div>
+
+    <div>
+      {% if bom.is_active %}
+        <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">Активная версия</span>
+      {% else %}
+        <span class="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">Архивная версия</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Карточка спецификации -->
+  <div class="fc-card p-6">
+    <div class="pb-4 mb-4 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <h1 class="text-lg font-bold text-[#252D29]">{{ bom.name }}</h1>
+        <span class="font-mono bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded font-bold">v{{ bom.version }}</span>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">
+        Изделие: <strong class="text-gray-800">{{ bom.product.name }}</strong> ({{ bom.product.sku }})
+        {% if bom.variant %} · Вариант: <strong class="text-gray-800">{{ bom.variant.name }}</strong>{% endif %}
+        {% if bom.routing_template %} · Маршрут: <strong class="text-gray-800">{{ bom.routing_template.name }}</strong>{% endif %}
+      </p>
+    </div>
+
+    <!-- Показатели себестоимости по карте -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div>
+        <span class="text-[11px] font-medium text-gray-400">Стоимость материалов (с отходом)</span>
+        <p class="text-base font-mono font-bold text-gray-800">{{ bom.materials_cost_kzt|intcomma }} ₸</p>
+      </div>
+      <div>
+        <span class="text-[11px] font-medium text-gray-400">Оплата труда ({{ bom.standard_labor_hours }} ч)</span>
+        <p class="text-base font-mono font-bold text-gray-800">{{ bom.labor_cost_kzt|intcomma }} ₸</p>
+      </div>
+      <div>
+        <span class="text-[11px] font-medium text-gray-400">Накладные цеховые</span>
+        <p class="text-base font-mono font-bold text-gray-800">{{ bom.overhead_rate_kzt|intcomma }} ₸</p>
+      </div>
+      <div>
+        <span class="text-[11px] font-medium text-gray-400">Плановая себестоимость единицы</span>
+        <p class="text-base font-mono font-bold text-[#173B35]">{{ bom.total_planned_cost_kzt|intcomma }} ₸</p>
+      </div>
+    </div>
+
+    {% if bom.description %}
+    <p class="text-xs text-gray-600 mt-4 pt-3 border-t border-gray-100 italic">{{ bom.description }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Таблица сырья и комплектующих по BOM -->
+  <div class="fc-card p-5">
+    <h2 class="text-sm font-bold text-[#252D29] mb-3">Состав материалов и комплектующих (Нормы расхода)</h2>
+
+    {% if items %}
+    <div class="overflow-x-auto">
+      <table class="fc-table w-full text-xs">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Материал / Комплектующее</th>
+            <th>Артикул</th>
+            <th>Базовая норма</th>
+            <th>Отход (%)</th>
+            <th>С учётом отхода</th>
+            <th>Цена за ед.</th>
+            <th>Сумма (₸)</th>
+            <th>Примечание</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="text-gray-400">{{ forloop.counter }}</td>
+            <td class="font-medium text-[#252D29]">{{ item.material.name }}</td>
+            <td class="font-mono text-gray-500">{{ item.material.sku }}</td>
+            <td>{{ item.quantity_planned }} {{ item.unit }}</td>
+            <td class="text-rose-600 font-medium">+{{ item.waste_percent }}%</td>
+            <td class="font-bold text-gray-800">{{ item.quantity_with_waste }} {{ item.unit }}</td>
+            <td class="font-mono text-gray-600">{{ item.material.purchase_cost_kzt|intcomma }} ₸</td>
+            <td class="font-mono font-bold text-[#173B35]">{{ item.planned_cost_kzt|intcomma }} ₸</td>
+            <td class="text-gray-400 text-[11px]">{{ item.notes|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-xs text-gray-400 py-4 text-center">В спецификации ещё нет материалов.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

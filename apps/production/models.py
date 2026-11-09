@@ -140,6 +140,18 @@ class BOM(models.Model):
         )
 
     @property
+    def materials_cost_kzt(self) -> Decimal:
+        return self.total_materials_cost_kzt
+
+    @property
+    def labor_cost_kzt(self) -> Decimal:
+        return (self.standard_labor_hours * self.labor_rate_hourly_kzt).quantize(Decimal('0.01'))
+
+    @property
+    def total_planned_cost_kzt(self) -> Decimal:
+        return self.planned_unit_cost_kzt
+
+    @property
     def planned_unit_cost_kzt(self) -> Decimal:
         """Нормативная себестоимость 1 изделия (материалы + труд + накладные)."""
         labor = (self.standard_labor_hours * self.labor_rate_hourly_kzt).quantize(Decimal('0.01'))
@@ -281,6 +293,14 @@ class ProductionOrder(models.Model):
 
     def __str__(self):
         return f'{self.order_number} — {self.product.name} ({self.quantity_planned} шт)'
+
+    @property
+    def total_planned_cost_kzt(self) -> Decimal:
+        return self.planned_cost_kzt
+
+    @property
+    def total_actual_cost_kzt(self) -> Decimal:
+        return self.actual_cost_kzt
 
     @property
     def unit_planned_cost_kzt(self) -> Decimal:
