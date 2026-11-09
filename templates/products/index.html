@@ -1,0 +1,85 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Продукция{% endblock %}
+
+{% block content %}
+
+<!-- Filter bar -->
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-48">
+      <label class="block text-xs font-medium text-gray-500 mb-1">Поиск</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Название или SKU..."
+             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none"
+             onfocus="this.style.boxShadow='0 0 0 2px #173B35';" onblur="this.style.boxShadow='';">
+    </div>
+    <div class="min-w-48">
+      <label class="block text-xs font-medium text-gray-500 mb-1">Категория</label>
+      <select name="category" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white">
+        <option value="">Все категории</option>
+        {% for val, label in categories %}
+        <option value="{{ val }}" {% if selected_category == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:#173B35;">Найти</button>
+    {% if q or selected_category %}
+    <a href="{% url 'products:index' %}" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600">Сбросить</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Products grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+  {% for item in products_with_stock %}
+  {% with p=item.product %}
+  <a href="{% url 'products:detail' p.pk %}"
+     class="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all group overflow-hidden">
+    <!-- Image placeholder -->
+    <div class="h-32 flex items-center justify-center" style="background:linear-gradient(135deg,#E8F0EE,#C5D8D4);">
+      <div class="text-center">
+        {% if p.category == 'WARDROBE' %}
+        <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zM12 3v18"/></svg>
+        {% elif p.category == 'TABLE' %}
+        <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7h16M4 7v10M20 7v10M7 7v10M17 7v10"/></svg>
+        {% else %}
+        <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        {% endif %}
+        <div class="text-xs font-medium mt-1 opacity-60" style="color:#173B35;">{{ p.get_category_display }}</div>
+      </div>
+    </div>
+    <div class="p-4">
+      <div class="font-mono text-xs text-gray-400 mb-1">{{ p.sku }}</div>
+      <div class="font-semibold text-sm mb-2 group-hover:text-primary-700 transition-colors" style="color:#252D29;">{{ p.name }}</div>
+      {% if p.dimensions %}
+      <div class="text-xs text-gray-400 mb-3">{{ p.dimensions }}</div>
+      {% endif %}
+      <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div>
+          <div class="text-xs text-gray-400">Цена продажи</div>
+          <div class="font-bold text-sm" style="color:#173B35;">{{ p.sale_price_kzt|floatformat:0|intcomma }} ₸</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-gray-400">На складе</div>
+          <div class="font-bold text-sm {% if item.stock == 0 %}text-red-500{% else %}text-gray-800{% endif %}">
+            {{ item.stock|floatformat:0 }} шт
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 flex items-center justify-between text-xs text-gray-400">
+        <span>Себестоимость: {{ p.production_cost_kzt|floatformat:0|intcomma }} ₸</span>
+        <span class="font-medium text-green-600">+{{ p.margin_percent }}%</span>
+      </div>
+    </div>
+  </a>
+  {% endwith %}
+  {% empty %}
+  <div class="col-span-3 py-16 text-center">
+    <svg class="w-12 h-12 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#173B35;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+    <p class="text-gray-500">Продукция не найдена</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "layouts/base.html" %}
+{% block title %}Профиль{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-xl border border-gray-100 shadow-sm p-8">
+  <h2 class="text-xl font-semibold mb-6" style="color:#252D29;">Профиль пользователя</h2>
+  <div class="space-y-4">
+    <div class="flex justify-between py-3 border-b border-gray-100">
+      <span class="text-sm text-gray-500">Логин</span>
+      <span class="text-sm font-medium" style="color:#252D29;">{{ user.username }}</span>
+    </div>
+    <div class="flex justify-between py-3 border-b border-gray-100">
+      <span class="text-sm text-gray-500">Имя</span>
+      <span class="text-sm font-medium" style="color:#252D29;">{{ user.get_full_name|default:"—" }}</span>
+    </div>
+    <div class="flex justify-between py-3 border-b border-gray-100">
+      <span class="text-sm text-gray-500">Email</span>
+      <span class="text-sm font-medium" style="color:#252D29;">{{ user.email|default:"—" }}</span>
+    </div>
+    <div class="flex justify-between py-3 border-b border-gray-100">
+      <span class="text-sm text-gray-500">Роль</span>
+      <span class="text-sm font-medium" style="color:#252D29;">{{ user.get_role_display }}</span>
+    </div>
+    <div class="flex justify-between py-3">
+      <span class="text-sm text-gray-500">Дата регистрации</span>
+      <span class="text-sm font-medium" style="color:#252D29;">{{ user.date_joined|date:"d.m.Y" }}</span>
+    </div>
+  </div>
+  <div class="mt-6">
+    <a href="{% url 'dashboard:index' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:#173B35;">← Вернуться на дашборд</a>
+  </div>
+</div>
+{% endblock %}

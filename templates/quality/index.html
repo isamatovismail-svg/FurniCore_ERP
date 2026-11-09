@@ -1,0 +1,95 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Контроль качества (ОТК){% endblock %}
+{% block breadcrumb %}Отдел технического контроля (ОТК){% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">Контроль качества (ОТК)</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Входной контроль сырья, межоперационный контроль и приёмка готовой продукции на WH-2</p>
+  </div>
+  <a href="{% url 'production:index' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+    ← Производство
+  </a>
+</div>
+
+<!-- Quality KPIs -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl p-4.5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Всего проверок</div>
+    <div class="text-2xl font-bold text-gray-800 mt-1">{{ total_checks }}</div>
+    <div class="text-[11px] text-gray-400 mt-0.5">Акты контроля качества</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-4.5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Принято без брака</div>
+    <div class="text-2xl font-bold text-emerald-700 mt-1">{{ pass_count }}</div>
+    <div class="text-[11px] text-gray-400 mt-0.5">Готово к передаче на WH-2</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-4.5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-amber-600 uppercase tracking-wider">На доработке</div>
+    <div class="text-2xl font-bold text-amber-700 mt-1">{{ rework_count }}</div>
+    <div class="text-[11px] text-gray-400 mt-0.5">Устранение дефектов</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-4.5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-red-600 uppercase tracking-wider">Выбраковано</div>
+    <div class="text-2xl font-bold text-red-700 mt-1">{{ defect_count }}</div>
+    <div class="text-[11px] text-gray-400 mt-0.5">Списание / рекламации</div>
+  </div>
+</div>
+
+<!-- Checks Table -->
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-bold text-gray-800">Журнал актов приёмки ОТК</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-xs text-left">
+      <thead class="bg-gray-50/80 text-gray-500 font-semibold border-b border-gray-100">
+        <tr>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Заказ цеха</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Изделие</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px] text-right">Проверено (шт)</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Результат</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Контролёр</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Дата проверки</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Замечания</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for c in checks %}
+        <tr class="hover:bg-gray-50/80 transition-colors">
+          <td class="px-5 py-3 font-mono font-bold text-primary-700">{{ c.production_order.order_number }}</td>
+          <td class="px-5 py-3 font-medium text-gray-800">{{ c.production_order.product.name }}</td>
+          <td class="px-5 py-3 text-right font-bold">{{ c.quantity_checked|floatformat:0 }}</td>
+          <td class="px-5 py-3">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+              {% if c.result == 'PASS' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+              {% elif c.result == 'REWORK' %}bg-amber-50 text-amber-700 border border-amber-200
+              {% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">
+              {{ c.get_result_display }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-gray-600">{{ c.checked_by.get_full_name|default:"Инженер ОТК" }}</td>
+          <td class="px-5 py-3 text-gray-400 font-mono text-[11px]">{{ c.checked_at|date:"d.m.Y H:i" }}</td>
+          <td class="px-5 py-3 text-gray-500">{{ c.notes|default:"Соответствует ГОСТ и ТУ" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="py-10 text-center text-gray-400">
+            Партии мебели на контроле ОТК отсутствуют
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

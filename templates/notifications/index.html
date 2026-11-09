@@ -1,0 +1,14 @@
+{% extends "layouts/base.html" %}
+{% block title %}Уведомления{% endblock %}
+{% block content %}
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center">
+  <svg class="w-14 h-14 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#173B35;">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+  </svg>
+  <h2 class="text-xl font-semibold mb-2" style="color:#252D29;">Уведомления</h2>
+  <p class="text-gray-500 text-sm mb-6">Модуль находится в разработке — будет реализован в следующих фазах.</p>
+  <a href="{% url 'dashboard:index' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90" style="background:#173B35;">
+    ← Вернуться на дашборд
+  </a>
+</div>
+{% endblock %}

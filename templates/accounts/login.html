@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Вход в систему — FurniCore ERP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#173B35', 700: '#173B35', 600: '#1E4D3D', 500: '#285F4D' },
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+  </style>
+</head>
+<body class="h-full" style="background:#F4F6F3;">
+
+<div class="min-h-screen flex">
+
+  <!-- Left decorative panel -->
+  <div class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12"
+       style="background: linear-gradient(135deg, #173B35 0%, #0F2822 100%);">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#285F4D;">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+      </div>
+      <span class="text-white text-xl font-bold">FurniCore ERP</span>
+    </div>
+
+    <div>
+      <h1 class="text-4xl font-bold text-white leading-tight mb-4">
+        Управление<br/>мебельным<br/>производством
+      </h1>
+      <p class="text-lg" style="color:rgba(255,255,255,0.65);">
+        Единая платформа для контроля складов, производства, продаж и финансов.
+      </p>
+
+      <div class="mt-10 grid grid-cols-2 gap-4">
+        {% for stat in demo_stats %}
+        <div class="rounded-xl p-4" style="background:rgba(255,255,255,0.08);">
+          <div class="text-2xl font-bold text-white">{{ stat.value }}</div>
+          <div class="text-sm mt-1" style="color:rgba(255,255,255,0.6);">{{ stat.label }}</div>
+        </div>
+        {% endfor %}
+        <div class="rounded-xl p-4" style="background:rgba(255,255,255,0.08);">
+          <div class="text-2xl font-bold text-white">2</div>
+          <div class="text-sm mt-1" style="color:rgba(255,255,255,0.6);">Склада в системе</div>
+        </div>
+        <div class="rounded-xl p-4" style="background:rgba(255,255,255,0.08);">
+          <div class="text-2xl font-bold text-white">7</div>
+          <div class="text-sm mt-1" style="color:rgba(255,255,255,0.6);">Ролей доступа</div>
+        </div>
+        <div class="rounded-xl p-4" style="background:rgba(255,255,255,0.08);">
+          <div class="text-2xl font-bold text-white">13</div>
+          <div class="text-sm mt-1" style="color:rgba(255,255,255,0.6);">Модулей системы</div>
+        </div>
+        <div class="rounded-xl p-4" style="background:rgba(255,255,255,0.08);">
+          <div class="text-2xl font-bold text-white">KZT ₸</div>
+          <div class="text-sm mt-1" style="color:rgba(255,255,255,0.6);">Казахстанский тенге</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-sm" style="color:rgba(255,255,255,0.4);">
+      © 2025 FurniCore ERP — Система управления мебельным производством
+    </div>
+  </div>
+
+  <!-- Right: Login form -->
+  <div class="flex-1 flex items-center justify-center p-8">
+    <div class="w-full max-w-sm">
+
+      <!-- Mobile logo -->
+      <div class="flex items-center gap-3 mb-8 lg:hidden">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#173B35;">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+          </svg>
+        </div>
+        <span class="text-xl font-bold" style="color:#173B35;">FurniCore ERP</span>
+      </div>
+
+      <h2 class="text-2xl font-bold mb-1" style="color:#252D29;">Добро пожаловать</h2>
+      <p class="text-sm text-gray-500 mb-8">Введите данные для входа в систему</p>
+
+      {% if messages %}
+      {% for message in messages %}
+      <div class="mb-4 px-4 py-3 rounded-lg text-sm font-medium
+                  {% if message.tags == 'success' %}bg-green-50 text-green-800 border border-green-200
+                  {% elif message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200
+                  {% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <form method="post" action="{% url 'accounts:login' %}{% if request.GET.next %}?next={{ request.GET.next }}{% endif %}" class="space-y-5">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.GET.next }}"/>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" style="color:#252D29;">Логин</label>
+          <input type="text" name="username" autocomplete="username" required
+                 class="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm outline-none focus:ring-2 focus:border-transparent bg-white"
+                 style="focus-ring-color: #173B35;"
+                 onfocus="this.style.boxShadow='0 0 0 2px #173B35'; this.style.borderColor='#173B35';"
+                 onblur="this.style.boxShadow=''; this.style.borderColor='#D1D5DB';"
+                 placeholder="Введите логин"/>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1.5" style="color:#252D29;">Пароль</label>
+          <input type="password" name="password" autocomplete="current-password" required
+                 class="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm outline-none bg-white"
+                 onfocus="this.style.boxShadow='0 0 0 2px #173B35'; this.style.borderColor='#173B35';"
+                 onblur="this.style.boxShadow=''; this.style.borderColor='#D1D5DB';"
+                 placeholder="Введите пароль"/>
+        </div>
+
+        <button type="submit"
+                class="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 active:opacity-80"
+                style="background:#173B35;">
+          Войти в систему
+        </button>
+      </form>
+
+      <!-- Demo credentials note -->
+      <div class="mt-6 p-4 rounded-lg border border-dashed border-gray-300 bg-gray-50">
+        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Демо-учётные записи</p>
+        <div class="space-y-1 text-xs text-gray-600">
+          <div class="flex justify-between"><span class="font-medium">owner</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">admin_sys</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">accountant</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">prod_manager</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">wh_manager</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">sales_mgr</span><span class="font-mono">furnicore123</span></div>
+          <div class="flex justify-between"><span class="font-medium">worker1</span><span class="font-mono">furnicore123</span></div>
+        </div>
+        <p class="text-xs text-orange-600 mt-2 font-medium">⚠ Только для демонстрации</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

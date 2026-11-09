@@ -1,0 +1,33 @@
+services:
+  furnicore-postgres:
+    image: postgres:16-alpine
+    container_name: furnicore_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: furnicore_user
+      POSTGRES_PASSWORD: furnicore_password_2026
+      POSTGRES_DB: furnicore_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - furnicore_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U furnicore_user -d furnicore_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  furnicore-redis:
+    image: redis:7-alpine
+    container_name: furnicore_redis
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - furnicore_redisdata:/data
+
+volumes:
+  furnicore_pgdata:
+    driver: local
+  furnicore_redisdata:
+    driver: local

@@ -1,0 +1,100 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}AI-ассистент{% endblock %}
+{% block breadcrumb %}AI-ассистент фабрики FurniCore{% endblock %}
+
+{% block content %}
+
+<div class="max-w-4xl mx-auto flex flex-col h-[calc(100vh-140px)]">
+
+  <!-- Header Card -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 sm:p-5 mb-4 flex items-center justify-between flex-shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 shadow-2xs">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-gray-800">Интеллектуальный ассистент FurniCore</h1>
+          <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">LLM ERP Copilot</span>
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">Мгновенный анализ остатков сырья, статусов заказов цеха и финансовых показателей фабрики</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messages Container -->
+  <div class="flex-1 bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 sm:p-6 overflow-y-auto space-y-4 mb-4" id="chatContainer">
+    
+    <!-- Welcome system message -->
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-700 font-bold text-xs flex-shrink-0">
+        AI
+      </div>
+      <div class="p-4 rounded-2xl rounded-tl-none bg-gray-50 border border-gray-100 max-w-2xl text-xs text-gray-700 leading-relaxed shadow-2xs">
+        <p class="font-semibold text-gray-900 mb-1">Здравствуйте! Я AI-ассистент ERP-системы FurniCore.</p>
+        <p>Я подключён к рабочей базе данных PostgreSQL и могу предоставить оперативную информацию:</p>
+        <ul class="list-disc list-inside mt-2 space-y-1 text-gray-600">
+          <li>Остатки сырья на складе WH-1 и дефицитные позиции</li>
+          <li>Количество готовой мебели на складе WH-2 и резервы</li>
+          <li>Статусы производственных заказов в цехе</li>
+          <li>Выручка, расходы и финансовый результат предприятия</li>
+        </ul>
+      </div>
+    </div>
+
+    {% for msg in chat_messages %}
+    <div class="flex items-start gap-3 {% if msg.role == 'user' %}flex-row-reverse{% endif %}">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0
+        {% if msg.role == 'user' %}bg-primary-700 text-white{% else %}bg-primary-50 text-primary-700{% endif %}">
+        {% if msg.role == 'user' %}{{ request.user.username|slice:":2"|upper }}{% else %}AI{% endif %}
+      </div>
+      <div class="p-3.5 rounded-2xl text-xs leading-relaxed max-w-2xl
+        {% if msg.role == 'user' %}bg-primary-700 text-white rounded-tr-none shadow-xs{% else %}bg-gray-50 border border-gray-100 text-gray-800 rounded-tl-none shadow-2xs{% endif %}">
+        {{ msg.content }}
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>
+
+  <!-- Quick Prompts Buttons -->
+  <div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1 text-xs">
+    <button onclick="sendQuickPrompt('Проверь дефицит сырья на складе WH-1')"
+            class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-primary-500 hover:text-primary-700 whitespace-nowrap shadow-2xs transition-all">
+      🔍 Дефицит на WH-1
+    </button>
+    <button onclick="sendQuickPrompt('Какой статус производственных заказов в цехе?')"
+            class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-primary-500 hover:text-primary-700 whitespace-nowrap shadow-2xs transition-all">
+      🏭 Заказы в цехе
+    </button>
+    <button onclick="sendQuickPrompt('Какая текущая выручка и прибыль фабрики?')"
+            class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-primary-500 hover:text-primary-700 whitespace-nowrap shadow-2xs transition-all">
+      📊 Выручка и прибыль
+    </button>
+  </div>
+
+  <!-- Input Form -->
+  <form method="post" class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-2 flex items-center gap-2 flex-shrink-0" id="promptForm">
+    {% csrf_token %}
+    <input type="text" name="query" id="promptInput" required placeholder="Задайте вопрос по данным фабрики (например: какие материалы заканчиваются?)..."
+           class="flex-1 px-3 py-2 text-xs outline-none bg-transparent placeholder-gray-400">
+    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-90 flex-shrink-0" style="background:#173B35;">
+      Отправить
+    </button>
+  </form>
+
+</div>
+
+<script>
+  function sendQuickPrompt(text) {
+    document.getElementById('promptInput').value = text;
+    document.getElementById('promptForm').submit();
+  }
+  const chatContainer = document.getElementById('chatContainer');
+  if (chatContainer) {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+</script>
+{% endblock %}

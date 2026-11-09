@@ -1,0 +1,115 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Инвентаризация складов — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+      <a href="{% url 'warehouses:index' %}" class="hover:underline">Склады</a>
+      <span>/</span>
+      <span class="text-gray-700 font-medium">Инвентаризация</span>
+    </div>
+    <h1 class="text-2xl font-bold text-[#173B35]">Акты инвентаризации складов</h1>
+    <p class="text-xs text-gray-500 mt-1">Сверка фактических остатков сырья и готовой мебели с учётными данными системы</p>
+  </div>
+  {% if can_manage %}
+  <div class="flex items-center gap-2">
+    <a href="{% url 'warehouses:inventory_create' %}" class="fc-btn-primary text-xs flex items-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Начать новую инвентаризацию
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Реестр актов инвентаризации -->
+<div class="fc-card overflow-hidden">
+  {% if audits %}
+  <div class="overflow-x-auto">
+    <table class="fc-table">
+      <thead>
+        <tr>
+          <th>Номер акта</th>
+          <th>Склад</th>
+          <th>Статус</th>
+          <th>Дата ведомости</th>
+          <th>Позиций</th>
+          <th>Создал</th>
+          <th>Провел сверку</th>
+          <th class="text-right">Действия</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for a in audits %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="font-mono text-xs font-bold text-[#173B35]">
+            <a href="{% url 'warehouses:inventory_detail' a.id %}" class="hover:underline">
+              {{ a.doc_number }}
+            </a>
+          </td>
+          <td>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {% if a.warehouse.code == 'WH-1' %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %}">
+              {{ a.warehouse.code }} — {{ a.warehouse.name }}
+            </span>
+          </td>
+          <td>
+            {% if a.status == 'POSTED' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+              Завершена и проведена
+            </span>
+            {% elif a.status == 'DRAFT' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+              В процессе пересчёта
+            </span>
+            {% elif a.status == 'CANCELLED' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+              Аннулирована
+            </span>
+            {% endif %}
+          </td>
+          <td class="text-xs text-gray-500">{{ a.doc_date|date:"d.m.Y" }}</td>
+          <td class="text-xs font-semibold text-gray-900">{{ a.items.count }} поз.</td>
+          <td class="text-xs text-gray-500">{{ a.created_by.get_full_name_ru|default:"Система" }}</td>
+          <td class="text-xs text-gray-500">{{ a.posted_by.get_full_name_ru|default:"—" }}</td>
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-1.5">
+              <a href="{% url 'warehouses:inventory_detail' a.id %}" class="px-2.5 py-1 text-xs font-medium text-[#173B35] bg-[#E8F0EE] hover:bg-[#D4E4E0] rounded transition-colors">
+                {% if a.is_draft %}Ввести подсчёт{% else %}Просмотр акта{% endif %}
+              </a>
+              <a href="{% url 'warehouses:document_pdf' a.id %}" target="_blank" class="p-1 text-gray-400 hover:text-[#173B35]" title="Печать ведомости">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="py-16 text-center">
+    <div class="w-12 h-12 rounded-full bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+      </svg>
+    </div>
+    <div class="text-sm font-semibold text-gray-700">Инвентаризации ещё не проводились</div>
+    <p class="text-xs text-gray-500 mt-1">Создайте ведомость для фиксации книжных остатков и ввода фактического наличия.</p>
+    {% if can_manage %}
+    <a href="{% url 'warehouses:inventory_create' %}" class="fc-btn-primary text-xs inline-flex items-center gap-1.5 mt-4">
+      Начать инвентаризацию
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

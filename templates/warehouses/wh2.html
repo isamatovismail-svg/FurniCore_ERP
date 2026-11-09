@@ -1,0 +1,231 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}WH-2 — Склад готовой продукции{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb / Back -->
+<div class="mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div class="flex items-center gap-2 text-xs text-gray-500">
+    <a href="{% url 'warehouses:index' %}" class="hover:underline text-[#173B35]">Склады</a>
+    <span>/</span>
+    <span class="font-medium text-gray-800">WH-2 (Готовая продукция)</span>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    <a href="{% url 'warehouses:scanner' %}" class="fc-btn-secondary text-xs flex items-center gap-1.5">
+      <svg class="w-4 h-4 text-[#173B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+      </svg>
+      Сканер ШК
+    </a>
+    <a href="{% url 'warehouses:document_create' %}?wh=WH-2&type=FINISHED_RECEIPT" class="fc-btn-primary text-xs flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Приёмка из цеха (ОТК)
+    </a>
+    <a href="{% url 'warehouses:document_create' %}?wh=WH-2&type=RESERVATION" class="fc-btn-secondary text-xs flex items-center gap-1.5">
+      Резервировать
+    </a>
+    <a href="{% url 'warehouses:document_create' %}?wh=WH-2&type=SHIPMENT" class="fc-btn-secondary text-xs flex items-center gap-1.5">
+      Отгрузить клиенту
+    </a>
+    <a href="{% url 'products:index' %}" class="fc-btn-secondary text-xs">
+      Каталог изделий →
+    </a>
+  </div>
+</div>
+
+<!-- Header info card -->
+<div class="fc-card p-6 mb-6">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-gray-100">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-[#E8F0EE]">
+        <svg class="w-6 h-6 text-[#173B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-bold text-gray-900">WH-2 — Склад готовой корпусной и мягкой мебели</h1>
+          <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Активен</span>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">{{ warehouse.address|default:"г. Алматы, ул. Промышленная, 12Б" }} · Готовые изделия: шкафы, кухни, кровати, столы, диваны</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick stats -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5">
+    <div>
+      <div class="text-xs text-gray-400 font-semibold uppercase">Физический остаток</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">{{ total_items|floatformat:0 }} шт</div>
+      <div class="text-[11px] text-gray-500 mt-0.5">Всего изделий на складе</div>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400 font-semibold uppercase">В резерве / Свободно</div>
+      <div class="text-2xl font-bold mt-1">
+        <span class="text-blue-600">{{ total_reserved|floatformat:0 }}</span> / <span class="text-emerald-700">{{ total_available|floatformat:0 }}</span> шт
+      </div>
+      <div class="text-[11px] text-gray-500 mt-0.5">Под заказы клиентов</div>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400 font-semibold uppercase">Оценка в рознице</div>
+      <div class="text-2xl font-bold text-[#173B35] mt-1">{{ total_value|floatformat:0|intcomma }} ₸</div>
+      <div class="text-[11px] text-gray-500 mt-0.5">Себестоимость: {{ total_cost_val|floatformat:0|intcomma }} ₸</div>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400 font-semibold uppercase">Быстрые операции</div>
+      <div class="flex items-center gap-2 mt-2">
+        <a href="{% url 'warehouses:inventory_create' %}" class="text-xs text-[#173B35] hover:underline font-semibold">
+          Акт инвентаризации WH-2 →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Search & filter -->
+<div class="fc-card p-4 mb-6">
+  <form method="get" class="flex flex-wrap gap-3 items-center">
+    <div class="flex-1 min-w-48">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск по названию модели, SKU или штрихкоду мебели..." class="fc-input text-xs">
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="submit" class="fc-btn-primary text-xs px-4">
+        Найти
+      </button>
+      {% if q %}
+      <a href="{% url 'warehouses:wh2' %}" class="fc-btn-secondary text-xs px-3">
+        Сброс
+      </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Balances table -->
+<div class="fc-card overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-bold text-gray-900">Готовые изделия на складе WH-2</h3>
+    <span class="text-xs text-gray-400">Моделей: {{ balances|length }}</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="fc-table">
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Штрихкод</th>
+          <th>Модель изделия</th>
+          <th>Категория</th>
+          <th class="text-right">На складе</th>
+          <th class="text-right">В резерве</th>
+          <th class="text-right">Свободно</th>
+          <th class="text-right">Розн. цена</th>
+          <th class="text-right">Сумма в наличии</th>
+          <th class="text-right">Этикетка</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for b in balances %}
+        <tr class="hover:bg-gray-50">
+          <td class="font-mono text-xs font-semibold text-gray-700">{{ b.product.sku }}</td>
+          <td class="font-mono text-[11px] text-gray-500">{{ b.product.effective_barcode }}</td>
+          <td>
+            <a href="{% url 'products:detail' b.product.pk %}" class="font-medium text-xs text-[#173B35] hover:underline">
+              {{ b.product.name }}
+            </a>
+          </td>
+          <td class="text-xs text-gray-500">{{ b.product.get_category_display }}</td>
+          <td class="text-right text-xs font-bold text-gray-900">
+            {{ b.current_stock|floatformat:0 }} шт
+          </td>
+          <td class="text-right text-xs font-semibold text-blue-600">
+            {{ b.reserved_stock|floatformat:0 }} шт
+          </td>
+          <td class="text-right text-xs font-bold {% if b.available_stock > 0 %}text-emerald-700{% else %}text-gray-400{% endif %}">
+            {{ b.available_stock|floatformat:0 }} шт
+          </td>
+          <td class="text-right text-xs font-medium text-gray-900">
+            {{ b.product.sale_price_kzt|floatformat:0|intcomma }} ₸
+          </td>
+          <td class="text-right text-xs font-bold text-[#173B35]">
+            {% widthratio b.current_stock 1 b.product.sale_price_kzt as prod_val %}
+            {{ prod_val|intcomma }} ₸
+          </td>
+          <td class="text-right">
+            <a href="{% url 'warehouses:item_label_pdf' 'product' b.product.id %}" target="_blank" class="p-1 text-gray-400 hover:text-[#173B35] inline-block" title="Термоэтикетка ШК/QR">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+              </svg>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="p-8 text-center text-gray-400 text-xs">
+            Изделия не найдены
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Warehouse movements log -->
+<div class="fc-card overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-bold text-gray-900">Проводки по складу WH-2</h3>
+    <a href="{% url 'warehouses:document_list' %}?wh=WH-2" class="text-xs text-[#173B35] hover:underline font-semibold">Все документы WH-2 →</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="fc-table">
+      <thead>
+        <tr>
+          <th>Проводка</th>
+          <th>Документ-основание</th>
+          <th>Операция</th>
+          <th>Изделие</th>
+          <th class="text-right">Количество</th>
+          <th class="text-right">Сумма</th>
+          <th>Исполнитель</th>
+          <th>Дата</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for mv in movements %}
+        <tr class="hover:bg-gray-50">
+          <td class="font-mono text-xs font-semibold text-[#173B35]">{{ mv.movement_number }}</td>
+          <td class="font-mono text-xs text-gray-600">
+            {% if mv.document %}
+            <a href="{% url 'warehouses:document_detail' mv.document.id %}" class="hover:underline text-[#173B35]">
+              {{ mv.document.doc_number }}
+            </a>
+            {% else %}
+            {{ mv.reference_number|default:"—" }}
+            {% endif %}
+          </td>
+          <td>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold
+              {% if mv.movement_type == 'FINISHED_RECEIPT' %}bg-emerald-100 text-emerald-800
+              {% elif mv.movement_type == 'SHIPMENT' %}bg-purple-100 text-purple-800
+              {% elif mv.movement_type == 'RESERVATION' %}bg-blue-100 text-blue-800
+              {% else %}bg-gray-100 text-gray-700{% endif %}">
+              {{ mv.get_movement_type_display }}
+            </span>
+          </td>
+          <td class="text-xs font-medium text-gray-900">{{ mv.product.name|default:"—" }}</td>
+          <td class="text-right text-xs font-bold">{{ mv.quantity|floatformat:0 }} шт</td>
+          <td class="text-right text-xs font-medium">{{ mv.total_cost_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="text-xs text-gray-500">{{ mv.performed_by.get_full_name_ru|default:"Система" }}</td>
+          <td class="text-xs text-gray-400">{{ mv.created_at|date:"d.m.Y H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="p-6 text-center text-gray-400 text-xs">Нет проводок</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,268 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Терминал сканирования QR и штрихкодов — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+      <a href="{% url 'warehouses:index' %}" class="hover:underline">Склады</a>
+      <span>/</span>
+      <span class="text-gray-700 font-medium">Терминал сканирования</span>
+    </div>
+    <h1 class="text-2xl font-bold text-[#173B35]">Складской сканер QR и штрихкодов</h1>
+    <p class="text-xs text-gray-500 mt-1">Мгновенная идентификация сырья на WH-1 и готовой мебели на WH-2</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{% url 'warehouses:document_create' %}" class="fc-btn-secondary text-xs">
+      Новый складской документ
+    </a>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6" x-data="scannerApp()">
+  <!-- Левая колонка: Поле ввода со сканера / камеры -->
+  <div class="fc-card p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-xl bg-[#E8F0EE] flex items-center justify-center text-[#173B35]">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-sm font-bold text-gray-900">Готов к сканированию</h2>
+        <p class="text-xs text-gray-500">USB-сканер или ручной ввод</p>
+      </div>
+    </div>
+
+    <form @submit.prevent="lookupCode()" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Считанный код / Артикул / Штрихкод</label>
+        <input 
+          type="text" 
+          x-model="code" 
+          x-ref="barcodeInput" 
+          autofocus 
+          placeholder="Наведите луч сканера или введите SKU..."
+          class="fc-input text-sm font-mono py-2.5 px-3 border-2 focus:border-[#173B35] font-semibold"
+          @keydown.enter.prevent="lookupCode()"
+        >
+        <p class="text-[11px] text-gray-400 mt-1">Поле активно для считывания лучевым сканером (Enter завершает ввод).</p>
+      </div>
+
+      <div class="flex gap-2">
+        <button type="submit" class="fc-btn-primary text-xs flex-1 justify-center py-2.5" :disabled="loading">
+          <span x-show="!loading">Найти номенклатуру</span>
+          <span x-show="loading">Поиск в базе...</span>
+        </button>
+        <button type="button" @click="clear()" class="fc-btn-secondary text-xs px-3">
+          Очистить
+        </button>
+      </div>
+    </form>
+
+    <!-- Быстрые примеры для проверки -->
+    <div class="mt-6 pt-5 border-t border-gray-100">
+      <div class="text-[11px] font-semibold text-gray-500 uppercase mb-2">Быстрый тест (примеры кодов):</div>
+      <div class="flex flex-wrap gap-1.5">
+        <button type="button" @click="testCode('MAT-LUM-001')" class="px-2 py-1 text-[11px] bg-gray-100 hover:bg-gray-200 rounded font-mono text-gray-700">
+          MAT-LUM-001
+        </button>
+        <button type="button" @click="testCode('MAT-MDF-001')" class="px-2 py-1 text-[11px] bg-gray-100 hover:bg-gray-200 rounded font-mono text-gray-700">
+          MAT-MDF-001
+        </button>
+        <button type="button" @click="testCode('FURN-WRD-001')" class="px-2 py-1 text-[11px] bg-gray-100 hover:bg-gray-200 rounded font-mono text-gray-700">
+          FURN-WRD-001
+        </button>
+        <button type="button" @click="testCode('FURN-TBL-001')" class="px-2 py-1 text-[11px] bg-gray-100 hover:bg-gray-200 rounded font-mono text-gray-700">
+          FURN-TBL-001
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Правая колонка: Карточка найденного ТМЦ -->
+  <div class="fc-card p-6 lg:col-span-2">
+    <!-- Состояние: ничего не отсканировано -->
+    <div x-show="!item && !error" class="py-16 text-center text-gray-400">
+      <div class="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center mb-3 text-gray-300">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+        </svg>
+      </div>
+      <div class="text-sm font-semibold text-gray-600">Ожидание сканирования</div>
+      <p class="text-xs text-gray-400 mt-1">Отсканируйте этикетку со штрихкодом или QR-кодом для отображения карточки ТМЦ</p>
+    </div>
+
+    <!-- Ошибка: не найдено -->
+    <div x-show="error" class="py-12 text-center">
+      <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center mb-3">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div class="text-sm font-bold text-gray-900" x-text="error"></div>
+      <p class="text-xs text-gray-500 mt-1">Проверьте правильность кода или добавьте позицию в справочник.</p>
+    </div>
+
+    <!-- Найдено ТМЦ -->
+    <div x-show="item" class="space-y-6">
+      <div class="flex items-start justify-between pb-4 border-b border-gray-100">
+        <div>
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold"
+                :class="item.item_type === 'material' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'"
+                x-text="item.warehouse">
+          </span>
+          <h2 class="text-xl font-bold text-gray-900 mt-1" x-text="item.name"></h2>
+          <div class="flex items-center gap-3 text-xs text-gray-500 mt-1">
+            <span>Категория: <b class="text-gray-700" x-text="item.category"></b></span>
+            <span>•</span>
+            <span>Артикул: <b class="font-mono text-gray-800" x-text="item.sku"></b></span>
+            <span>•</span>
+            <span>ШК: <b class="font-mono text-gray-800" x-text="item.barcode"></b></span>
+          </div>
+        </div>
+        <a :href="item.label_url" target="_blank" class="fc-btn-secondary text-xs flex items-center gap-1.5" title="Печать термоэтикетки">
+          <svg class="w-4 h-4 text-[#173B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+          </svg>
+          Этикетка (PDF)
+        </a>
+      </div>
+
+      <!-- Остатки и показатели -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div class="text-[11px] font-semibold text-gray-500 uppercase">Физический остаток</div>
+          <div class="text-xl font-bold mt-1" :class="item.is_low_stock ? 'text-rose-600' : 'text-[#173B35]'">
+            <span x-text="item.current_stock.toFixed(2)"></span> <span class="text-xs text-gray-600" x-text="item.unit"></span>
+          </div>
+          <div x-show="item.is_low_stock" class="text-[11px] text-rose-600 font-semibold mt-0.5">Ниже буфера!</div>
+        </div>
+
+        <template x-if="item.item_type === 'product'">
+          <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+            <div class="text-[11px] font-semibold text-gray-500 uppercase">В резерве / Свободно</div>
+            <div class="text-lg font-bold text-gray-800 mt-1">
+              <span class="text-blue-600" x-text="item.reserved_stock"></span> / <span class="text-emerald-700" x-text="item.available_stock"></span> шт
+            </div>
+            <div class="text-[11px] text-gray-500 mt-0.5">Доступно к продаже</div>
+          </div>
+        </template>
+
+        <template x-if="item.item_type === 'material'">
+          <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+            <div class="text-[11px] font-semibold text-gray-500 uppercase">Ячейка хранения</div>
+            <div class="text-lg font-bold text-gray-800 mt-1 font-mono" x-text="item.location"></div>
+            <div class="text-[11px] text-gray-500 mt-0.5">Стеллаж WH-1</div>
+          </div>
+        </template>
+
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div class="text-[11px] font-semibold text-gray-500 uppercase">Учётная цена</div>
+          <div class="text-lg font-bold text-gray-800 mt-1">
+            <span x-text="new Intl.NumberFormat('ru-RU').format(item.price_kzt || item.sale_price_kzt)"></span> ₸
+          </div>
+          <div class="text-[11px] text-gray-500 mt-0.5" x-text="item.item_type === 'material' ? 'Закупка сырья' : 'Розничная цена'"></div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div class="text-[11px] font-semibold text-gray-500 uppercase">Минимальный буфер</div>
+          <div class="text-lg font-bold text-gray-800 mt-1">
+            <span x-text="item.min_stock || 0"></span> <span class="text-xs text-gray-600" x-text="item.unit"></span>
+          </div>
+          <div class="text-[11px] text-gray-500 mt-0.5">Точка дозаказа</div>
+        </div>
+      </div>
+
+      <!-- Быстрые действия по найденному ТМЦ -->
+      <div class="pt-4 border-t border-gray-100">
+        <div class="text-xs font-semibold text-gray-700 mb-2">Оперативные складские действия:</div>
+        <div class="flex flex-wrap gap-2">
+          <template x-if="item.item_type === 'material'">
+            <div class="flex gap-2">
+              <a :href="'/warehouses/documents/create/?wh=WH-1&type=RECEIPT'" class="fc-btn-primary text-xs bg-emerald-700 hover:bg-emerald-800">
+                + Оформить приход сырья
+              </a>
+              <a :href="'/warehouses/documents/create/?wh=WH-1&type=PRODUCTION_ISSUE'" class="fc-btn-secondary text-xs">
+                → Отпустить в цех
+              </a>
+              <a :href="'/materials/?q=' + item.sku" class="fc-btn-secondary text-xs">
+                Показать в каталоге материалов
+              </a>
+            </div>
+          </template>
+
+          <template x-if="item.item_type === 'product'">
+            <div class="flex gap-2">
+              <a :href="'/warehouses/documents/create/?wh=WH-2&type=FINISHED_RECEIPT'" class="fc-btn-primary text-xs bg-emerald-700 hover:bg-emerald-800">
+                + Приёмка из цеха (ОТК)
+              </a>
+              <a :href="'/warehouses/documents/create/?wh=WH-2&type=RESERVATION'" class="fc-btn-secondary text-xs">
+                Резервировать под заказ
+              </a>
+              <a :href="'/warehouses/documents/create/?wh=WH-2&type=SHIPMENT'" class="fc-btn-secondary text-xs">
+                Отгрузить покупателю
+              </a>
+              <a :href="'/products/' + item.id + '/'" class="fc-btn-secondary text-xs">
+                Открыть карточку изделия
+              </a>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function scannerApp() {
+  return {
+    code: '',
+    loading: false,
+    item: null,
+    error: null,
+
+    testCode(val) {
+      this.code = val;
+      this.lookupCode();
+    },
+
+    clear() {
+      this.code = '';
+      this.item = null;
+      this.error = null;
+      this.$nextTick(() => {
+        this.$refs.barcodeInput.focus();
+      });
+    },
+
+    lookupCode() {
+      const q = this.code.trim();
+      if (!q) return;
+
+      this.loading = true;
+      this.error = null;
+
+      fetch(`/warehouses/scan/lookup/?code=${encodeURIComponent(q)}`)
+        .then(res => res.json())
+        .then(data => {
+          this.loading = false;
+          if (data.found) {
+            this.item = data;
+            this.error = null;
+          } else {
+            this.item = null;
+            this.error = data.message || 'Номенклатура не найдена';
+          }
+        })
+        .catch(err => {
+          this.loading = false;
+          this.item = null;
+          this.error = 'Ошибка соединения с сервером при сканировании.';
+        });
+    }
+  };
+}
+</script>
+{% endblock %}

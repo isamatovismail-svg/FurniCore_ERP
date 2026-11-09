@@ -1,0 +1,158 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Инвентаризация {{ doc.doc_number }} — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+      <a href="{% url 'warehouses:index' %}" class="hover:underline">Склады</a>
+      <span>/</span>
+      <a href="{% url 'warehouses:inventory_list' %}" class="hover:underline">Инвентаризация</a>
+      <span>/</span>
+      <span class="text-gray-700 font-medium font-mono">{{ doc.doc_number }}</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <h1 class="text-2xl font-bold text-[#173B35]">Сличительная ведомость инвентаризации</h1>
+      <span class="font-mono text-sm px-2.5 py-1 rounded bg-gray-100 font-bold text-gray-700">{{ doc.doc_number }}</span>
+      {% if doc.status == 'POSTED' %}
+      <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+        <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+        Проведена (остатки скорректированы)
+      </span>
+      {% elif doc.status == 'DRAFT' %}
+      <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+        Ввод фактических остатков
+      </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <a href="{% url 'warehouses:document_pdf' doc.id %}" target="_blank" class="fc-btn-secondary text-xs flex items-center gap-1.5">
+      <svg class="w-4 h-4 text-[#173B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+      </svg>
+      Печать акта / ведомости
+    </a>
+  </div>
+</div>
+
+<!-- Информационные плашки -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+  <div class="fc-card p-4">
+    <div class="text-[11px] font-semibold text-gray-500 uppercase">Склад</div>
+    <div class="text-sm font-bold text-gray-900 mt-1">{{ doc.warehouse.code }} — {{ doc.warehouse.name }}</div>
+  </div>
+
+  <div class="fc-card p-4">
+    <div class="text-[11px] font-semibold text-gray-500 uppercase">Позиций к сверке</div>
+    <div class="text-sm font-bold text-gray-900 mt-1">{{ items|length }} наименований</div>
+  </div>
+
+  <div class="fc-card p-4">
+    <div class="text-[11px] font-semibold text-gray-500 uppercase">Суммарный излишек (+)</div>
+    <div class="text-sm font-bold text-emerald-600 mt-1">+{{ total_surplus|floatformat:3 }} ед.</div>
+  </div>
+
+  <div class="fc-card p-4">
+    <div class="text-[11px] font-semibold text-gray-500 uppercase">Суммарная недостача (-)</div>
+    <div class="text-sm font-bold text-rose-600 mt-1">-{{ total_shortage|floatformat:3 }} ед.</div>
+  </div>
+</div>
+
+<!-- Форма ввода фактического наличия -->
+<form method="post" id="inventoryForm">
+  {% csrf_token %}
+
+  <div class="fc-card overflow-hidden mb-6">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-gray-900">Сличительная таблица ТМЦ</h2>
+      <div class="text-xs text-gray-500">
+        {% if doc.is_draft %}Внесите реальное количество, подсчитанное на складе{% else %}Сверка зафиксирована{% endif %}
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-gray-50 text-gray-600 border-b border-gray-200">
+          <tr>
+            <th class="py-2.5 px-4 text-left w-12">№</th>
+            <th class="py-2.5 px-4 text-left w-32">Артикул / SKU</th>
+            <th class="py-2.5 px-4 text-left">Наименование номенклатуры</th>
+            <th class="py-2.5 px-4 text-right w-28">Учётный остаток</th>
+            <th class="py-2.5 px-4 text-right w-36">Фактический подсчёт</th>
+            <th class="py-2.5 px-4 text-right w-28">Расхождение</th>
+            <th class="py-2.5 px-4 text-left w-20">Ед.</th>
+            <th class="py-2.5 px-4 text-right w-16">Этикетка</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for item in items %}
+          <tr class="hover:bg-gray-50 transition-colors {% if item.discrepancy_quantity and item.discrepancy_quantity != 0 %}bg-amber-50/40{% endif %}">
+            <td class="py-2.5 px-4 font-mono text-gray-400">{{ forloop.counter }}</td>
+            <td class="py-2.5 px-4 font-mono font-semibold text-gray-700">
+              {% if item.material %}{{ item.material.sku }}{% elif item.product %}{{ item.product.sku }}{% else %}—{% endif %}
+            </td>
+            <td class="py-2.5 px-4 font-medium text-gray-900">
+              {% if item.material %}{{ item.material.name }}{% elif item.product %}{{ item.product.name }}{% else %}—{% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-right font-mono font-medium text-gray-700">
+              {{ item.quantity|floatformat:3 }}
+            </td>
+            <td class="py-2.5 px-4 text-right">
+              {% if doc.is_draft and can_edit %}
+              <input type="number" step="0.001" min="0" name="actual_{{ item.id }}" value="{{ item.actual_quantity|default:item.quantity|stringformat:'.3f' }}" class="fc-input text-xs py-1 text-right font-bold w-28 inline-block" onchange="updateDiff(this, {{ item.quantity }})">
+              {% else %}
+              <span class="font-bold text-gray-900">{{ item.actual_quantity|floatformat:3 }}</span>
+              {% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-right font-bold font-mono">
+              {% if item.discrepancy_quantity > 0 %}
+                <span class="text-emerald-700">+{{ item.discrepancy_quantity|floatformat:3 }}</span>
+              {% elif item.discrepancy_quantity < 0 %}
+                <span class="text-rose-600">{{ item.discrepancy_quantity|floatformat:3 }}</span>
+              {% else %}
+                <span class="text-gray-400">0.000</span>
+              {% endif %}
+            </td>
+            <td class="py-2.5 px-4 text-gray-500">{{ item.unit }}</td>
+            <td class="py-2.5 px-4 text-right">
+              {% if item.material %}
+              <a href="{% url 'warehouses:item_label_pdf' 'material' item.material.id %}" target="_blank" class="p-1 text-gray-400 hover:text-[#173B35] inline-block" title="Печать термоэтикетки">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+              </a>
+              {% elif item.product %}
+              <a href="{% url 'warehouses:item_label_pdf' 'product' item.product.id %}" target="_blank" class="p-1 text-gray-400 hover:text-[#173B35] inline-block" title="Печать термоэтикетки">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if doc.is_draft and can_edit %}
+  <div class="flex items-center justify-end gap-3">
+    <a href="{% url 'warehouses:inventory_list' %}" class="fc-btn-secondary text-xs">
+      Вернуться к списку
+    </a>
+    <button type="submit" name="action" value="save" class="fc-btn-secondary text-xs">
+      Сохранить текущий подсчёт
+    </button>
+    <button type="submit" name="action" value="reconcile" class="fc-btn-primary text-xs bg-emerald-700 hover:bg-emerald-800" onclick="return confirm('Завершить инвентаризацию? Фактические остатки будут утверждены, а расхождения автоматически скорректированы проводками.')">
+      Утвердить и провести инвентаризацию
+    </button>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

@@ -1,0 +1,327 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Новый складской документ — FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+    <a href="{% url 'warehouses:index' %}" class="hover:underline">Склады</a>
+    <span>/</span>
+    <a href="{% url 'warehouses:document_list' %}" class="hover:underline">Журнал документов</a>
+    <span>/</span>
+    <span class="text-gray-700 font-medium">Новый документ</span>
+  </div>
+  <h1 class="text-2xl font-bold text-[#173B35]">Оформление складского документа</h1>
+  <p class="text-xs text-gray-500 mt-1">Официальная проводка поступления, списания или отгрузки товарно-материальных ценностей</p>
+</div>
+
+<form method="post" id="docForm" x-data="warehouseDocumentForm()">
+  {% csrf_token %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <!-- Основные реквизиты -->
+    <div class="fc-card p-5 lg:col-span-2">
+      <h2 class="text-sm font-bold text-[#173B35] mb-4">Основные реквизиты</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Склад операции *</label>
+          <select name="warehouse" x-model="warehouse" @change="onWarehouseChange" class="fc-input text-xs font-medium" required>
+            {% for wh in warehouses %}
+            <option value="{{ wh.id }}" data-type="{{ wh.warehouse_type }}" data-code="{{ wh.code }}" {% if wh.code == default_wh %}selected{% endif %}>
+              {{ wh.code }} — {{ wh.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Тип операции *</label>
+          <select name="doc_type" x-model="docType" @change="onDocTypeChange" class="fc-input text-xs font-medium" required>
+            <template x-for="dt in filteredDocTypes" :key="dt.value">
+              <option :value="dt.value" x-text="dt.label"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Дата составления *</label>
+          <input type="date" name="doc_date" value="{{ today }}" class="fc-input text-xs" required>
+        </div>
+
+        <!-- Динамическое поле контрагента -->
+        <div x-show="isSupplierNeeded()">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Поставщик сырья</label>
+          <select name="supplier" class="fc-input text-xs">
+            <option value="">Выберите поставщика...</option>
+            {% for s in suppliers %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div x-show="isCustomerNeeded()">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Клиент / Заказчик</label>
+          <select name="customer" class="fc-input text-xs">
+            <option value="">Выберите клиента...</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}">{{ c.full_name }} {% if c.company_name %}({{ c.company_name }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div x-show="isProdOrderNeeded()">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Производственный заказ</label>
+          <select name="production_order" class="fc-input text-xs">
+            <option value="">Без привязки к заказу цеха</option>
+            {% for po in prod_orders %}
+            <option value="{{ po.id }}">{{ po.order_number }} ({{ po.product.name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div x-show="isSalesOrderNeeded()">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Заказ покупателя</label>
+          <select name="sales_order" class="fc-input text-xs">
+            <option value="">Без привязки к заказу</option>
+            {% for so in sales_orders %}
+            <option value="{{ so.id }}">{{ so.order_number }} ({{ so.customer.full_name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Основание / Примечание</label>
+        <textarea name="notes" rows="2" placeholder="Например: Счёт-фактура поставщика №102, отгрузка по договору" class="fc-input text-xs"></textarea>
+      </div>
+    </div>
+
+    <!-- Сводка и правила -->
+    <div class="fc-card p-5 flex flex-col justify-between">
+      <div>
+        <h2 class="text-sm font-bold text-[#173B35] mb-3">Правила проведения</h2>
+        <div class="text-xs text-gray-600 space-y-2">
+          <p>• <b>Строго два склада:</b> WH-1 для сырья и фурнитуры, WH-2 для готовых изделий мебели.</p>
+          <p>• <b>Черновик</b> сохраняет документ без списания или оприходования остатков.</p>
+          <p>• <b>Проведение</b> списывает/начисляет физические остатки и формирует проводки в регистре движений.</p>
+          <p>• Программа контролирует достаточность свободных остатков и предотвращает уход в минус.</p>
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-gray-100 mt-4">
+        <div class="text-xs text-gray-500 uppercase font-semibold">Итоговая сумма по документу:</div>
+        <div class="text-2xl font-bold text-[#173B35] mt-1" x-text="formatKzt(calcTotal())">0 ₸</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Табличная часть позиций -->
+  <div class="fc-card mb-6 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-gray-900">Спецификация товарно-материальных ценностей</h2>
+      <button type="button" @click="addRow()" class="fc-btn-secondary text-xs flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-[#173B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Добавить строку
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-gray-50 text-gray-600 border-b border-gray-200">
+          <tr>
+            <th class="py-2.5 px-4 text-left w-12">№</th>
+            <th class="py-2.5 px-4 text-left min-w-[280px]">Номенклатура (ТМЦ)</th>
+            <th class="py-2.5 px-4 text-left w-24">Ед.</th>
+            <th class="py-2.5 px-4 text-right w-32">Количество</th>
+            <th class="py-2.5 px-4 text-right w-36">Цена за ед. (₸)</th>
+            <th class="py-2.5 px-4 text-right w-36">Сумма (₸)</th>
+            <th class="py-2.5 px-4 text-center w-12"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <template x-for="(row, idx) in rows" :key="row.id">
+            <tr class="hover:bg-gray-50/70">
+              <td class="py-2.5 px-4 font-mono text-gray-400" x-text="idx + 1"></td>
+              
+              <!-- Селект материала (WH-1) или изделия (WH-2) -->
+              <td class="py-2.5 px-4">
+                <template x-if="isWh1()">
+                  <select name="material_id[]" x-model="row.materialId" @change="onMaterialSelected(row)" class="fc-input text-xs py-1.5" required>
+                    <option value="">-- Выберите сырьё/материал --</option>
+                    {% for m in materials %}
+                    <option value="{{ m.id }}" data-unit="{{ m.unit }}" data-cost="{{ m.purchase_cost_kzt }}">
+                      {{ m.sku }} — {{ m.name }} ({{ m.unit }})
+                    </option>
+                    {% endfor %}
+                  </select>
+                </template>
+                <template x-if="!isWh1()">
+                  <select name="product_id[]" x-model="row.productId" @change="onProductSelected(row)" class="fc-input text-xs py-1.5" required>
+                    <option value="">-- Выберите мебельное изделие --</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}" data-unit="шт" data-cost="{{ p.sale_price_kzt }}">
+                      {{ p.sku }} — {{ p.name }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </template>
+              </td>
+
+              <td class="py-2.5 px-4">
+                <input type="text" name="unit[]" x-model="row.unit" class="fc-input text-xs py-1.5 bg-gray-50" readonly>
+              </td>
+
+              <td class="py-2.5 px-4 text-right">
+                <input type="number" step="0.001" min="0.001" name="quantity[]" x-model="row.quantity" class="fc-input text-xs py-1.5 text-right font-bold" required>
+              </td>
+
+              <td class="py-2.5 px-4 text-right">
+                <input type="number" step="0.01" min="0" name="unit_cost[]" x-model="row.unitCost" class="fc-input text-xs py-1.5 text-right font-medium">
+              </td>
+
+              <td class="py-2.5 px-4 text-right font-bold text-gray-900" x-text="formatKzt(row.quantity * row.unitCost)">
+                0 ₸
+              </td>
+
+              <td class="py-2.5 px-4 text-center">
+                <button type="button" @click="removeRow(idx)" class="text-gray-400 hover:text-rose-600 transition-colors p-1" title="Удалить строку">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Кнопки действий -->
+  <div class="flex items-center justify-end gap-3">
+    <a href="{% url 'warehouses:document_list' %}" class="fc-btn-secondary text-xs">
+      Отмена
+    </a>
+    <button type="submit" name="action" value="draft" class="fc-btn-secondary text-xs">
+      Сохранить как черновик
+    </button>
+    <button type="submit" name="action" value="post" class="fc-btn-primary text-xs bg-emerald-700 hover:bg-emerald-800">
+      Сохранить и сразу провести
+    </button>
+  </div>
+</form>
+
+<script>
+function warehouseDocumentForm() {
+  const allDocTypes = [
+    { value: 'RECEIPT', label: 'Приходная накладная (WH-1)', wh: 'RAW' },
+    { value: 'PRODUCTION_ISSUE', label: 'Требование-накладная на отпуск в цех (WH-1)', wh: 'RAW' },
+    { value: 'PRODUCTION_RETURN', label: 'Возврат материалов из цеха (WH-1)', wh: 'RAW' },
+    { value: 'FINISHED_RECEIPT', label: 'Приёмка готовой продукции из цеха (WH-2)', wh: 'FIN' },
+    { value: 'RESERVATION', label: 'Резервирование под клиентский заказ (WH-2)', wh: 'FIN' },
+    { value: 'UNRESERVATION', label: 'Снятие с резерва (WH-2)', wh: 'FIN' },
+    { value: 'SHIPMENT', label: 'Расходная накладная на отгрузку клиенту (WH-2)', wh: 'FIN' },
+    { value: 'CUSTOMER_RETURN', label: 'Возврат мебели от клиента (WH-2)', wh: 'FIN' },
+  ];
+
+  return {
+    warehouse: '{{ warehouses.first.id }}',
+    docType: '{{ default_type }}',
+    filteredDocTypes: [],
+    rows: [
+      { id: Date.now(), materialId: '', productId: '', quantity: 1, unit: 'шт', unitCost: 0 }
+    ],
+
+    init() {
+      this.updateDocTypes();
+    },
+
+    isWh1() {
+      const select = document.querySelector('select[name="warehouse"]');
+      if (!select) return true;
+      const opt = select.options[select.selectedIndex];
+      return opt && opt.dataset.code === 'WH-1';
+    },
+
+    onWarehouseChange() {
+      this.updateDocTypes();
+      // Очистить выбранные номенклатуры при смене типа склада
+      this.rows = [{ id: Date.now(), materialId: '', productId: '', quantity: 1, unit: 'шт', unitCost: 0 }];
+    },
+
+    updateDocTypes() {
+      const wh1 = this.isWh1();
+      const targetGroup = wh1 ? 'RAW' : 'FIN';
+      this.filteredDocTypes = allDocTypes.filter(d => d.wh === targetGroup);
+      if (!this.filteredDocTypes.some(d => d.value === this.docType)) {
+        this.docType = this.filteredDocTypes[0] ? this.filteredDocTypes[0].value : '';
+      }
+    },
+
+    onDocTypeChange() {},
+
+    isSupplierNeeded() {
+      return this.docType === 'RECEIPT';
+    },
+
+    isCustomerNeeded() {
+      return ['RESERVATION', 'SHIPMENT', 'CUSTOMER_RETURN'].includes(this.docType);
+    },
+
+    isProdOrderNeeded() {
+      return ['PRODUCTION_ISSUE', 'PRODUCTION_RETURN', 'FINISHED_RECEIPT'].includes(this.docType);
+    },
+
+    isSalesOrderNeeded() {
+      return ['RESERVATION', 'UNRESERVATION', 'SHIPMENT'].includes(this.docType);
+    },
+
+    addRow() {
+      this.rows.push({
+        id: Date.now() + Math.random(),
+        materialId: '',
+        productId: '',
+        quantity: 1,
+        unit: 'шт',
+        unitCost: 0
+      });
+    },
+
+    removeRow(idx) {
+      if (this.rows.length > 1) {
+        this.rows.splice(idx, 1);
+      }
+    },
+
+    onMaterialSelected(row) {
+      const select = event.target;
+      const opt = select.options[select.selectedIndex];
+      if (opt && opt.value) {
+        row.unit = opt.dataset.unit || 'шт';
+        row.unitCost = parseFloat(opt.dataset.cost) || 0;
+      }
+    },
+
+    onProductSelected(row) {
+      const select = event.target;
+      const opt = select.options[select.selectedIndex];
+      if (opt && opt.value) {
+        row.unit = 'шт';
+        row.unitCost = parseFloat(opt.dataset.cost) || 0;
+      }
+    },
+
+    calcTotal() {
+      return this.rows.reduce((sum, r) => sum + (parseFloat(r.quantity) || 0) * (parseFloat(r.unitCost) || 0), 0);
+    },
+
+    formatKzt(val) {
+      return new Intl.NumberFormat('ru-RU').format(Math.round(val)) + ' ₸';
+    }
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Продажи{% endblock %}
+
+{% block content %}
+
+<!-- Revenue cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Общая выручка</div>
+    <div class="text-2xl font-bold" style="color:#173B35;">{{ total_revenue|floatformat:0|intcomma }} ₸</div>
+    <div class="text-xs text-gray-400 mt-1">Все заказы</div>
+  </div>
+  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Всего заказов</div>
+    <div class="text-2xl font-bold" style="color:#252D29;">{{ total_orders }}</div>
+  </div>
+  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Новых заказов</div>
+    <div class="text-2xl font-bold" style="color:#252D29;">{{ status_counts.NEW|default:0 }}</div>
+  </div>
+  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Доставлено</div>
+    <div class="text-2xl font-bold text-green-600">{{ status_counts.DELIVERED|default:0 }}</div>
+  </div>
+</div>
+
+<!-- Filter + search -->
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-48">
+      <input type="text" name="q" value="{{ q }}" placeholder="Номер заказа или клиент..."
+             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none"
+             onfocus="this.style.boxShadow='0 0 0 2px #173B35';" onblur="this.style.boxShadow='';">
+    </div>
+    <div class="min-w-40">
+      <select name="status" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white">
+        <option value="">Все статусы</option>
+        {% for val, label in statuses %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:#173B35;">Найти</button>
+    {% if q or status_filter %}
+    <a href="{% url 'sales:index' %}" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600">Сбросить</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Orders table -->
+<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-50 border-b border-gray-100">
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Номер</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Клиент</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Позиции</th>
+          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Сумма</th>
+          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Предоплата</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Дата</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Статус</th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Менеджер</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for order in orders %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-5 py-3 font-mono text-xs font-semibold" style="color:#173B35;">{{ order.order_number }}</td>
+          <td class="px-5 py-3">
+            <div class="text-xs font-medium" style="color:#252D29;">{{ order.customer.full_name }}</div>
+            {% if order.customer.company_name %}
+            <div class="text-xs text-gray-400">{{ order.customer.company_name }}</div>
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 text-xs text-gray-500">{{ order.items.count }} позиций</td>
+          <td class="px-5 py-3 text-right text-xs font-bold" style="color:#252D29;">{{ order.total_amount_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="px-5 py-3 text-right text-xs text-gray-500">{{ order.deposit_amount_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="px-5 py-3 text-xs text-gray-500">{{ order.created_at|date:"d.m.Y" }}</td>
+          <td class="px-5 py-3">
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium
+              {% if order.status == 'NEW' %}bg-blue-100 text-blue-700
+              {% elif order.status == 'CONFIRMED' %}bg-indigo-100 text-indigo-700
+              {% elif order.status == 'IN_PRODUCTION' %}bg-yellow-100 text-yellow-700
+              {% elif order.status == 'SHIPPED' %}bg-purple-100 text-purple-700
+              {% elif order.status == 'DELIVERED' %}bg-green-100 text-green-700
+              {% elif order.status == 'CANCELLED' %}bg-red-100 text-red-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">
+              {{ order.get_status_display }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-xs text-gray-500">{{ order.created_by.get_full_name|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="py-12 text-center text-gray-400">Заказов не найдено</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

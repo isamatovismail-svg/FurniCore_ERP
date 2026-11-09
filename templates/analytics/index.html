@@ -1,0 +1,89 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Аналитика{% endblock %}
+{% block breadcrumb %}Аналитика и рентабельность{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">Аналитика и финансовые метрики</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Рентабельность, структура себестоимости и показатели оборачиваемости фабрики</p>
+  </div>
+  <a href="{% url 'finance:index' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+    Реестр расходов →
+  </a>
+</div>
+
+<!-- Key Business Metrics -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl p-5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Чистая рентабельность</div>
+    <div class="text-2xl font-bold {% if net_margin_pct >= 0 %}text-emerald-700{% else %}text-red-600{% endif %} mt-1">
+      {{ net_margin_pct }}%
+    </div>
+    <div class="text-[11px] text-gray-400 mt-1">Прибыль / Выручка</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Средний чек заказа</div>
+    <div class="text-2xl font-bold text-gray-800 mt-1">{{ avg_order_check|floatformat:0|intcomma }} ₸</div>
+    <div class="text-[11px] text-gray-400 mt-1">По всем контрактам</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Заказов в цехе</div>
+    <div class="text-2xl font-bold text-amber-700 mt-1">{{ active_orders }}</div>
+    <div class="text-[11px] text-gray-400 mt-1">Завершено партий: {{ completed_orders }}</div>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 border border-gray-200/80 shadow-2xs">
+    <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Суммарный доход</div>
+    <div class="text-2xl font-bold text-primary-700 mt-1">{{ total_sales|floatformat:0|intcomma }} ₸</div>
+    <div class="text-[11px] text-gray-400 mt-1">Расходы: {{ total_expenses|floatformat:0|intcomma }} ₸</div>
+  </div>
+</div>
+
+<!-- Product Margin Analysis Table -->
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden mb-6">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-bold text-gray-800">Рентабельность мебельной продукции</h3>
+    <span class="text-xs text-gray-400">Топ позиций каталога</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-xs text-left">
+      <thead class="bg-gray-50/80 text-gray-500 font-semibold border-b border-gray-100">
+        <tr>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Артикул</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Модель мебели</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px]">Категория</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px] text-right">Себестоимость</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px] text-right">Розничная цена</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px] text-right">Маржа (₸)</th>
+          <th class="px-5 py-3 uppercase tracking-wider text-[10px] text-right">Маржинальность</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for p in products %}
+        <tr class="hover:bg-gray-50/80 transition-colors">
+          <td class="px-5 py-3 font-mono text-gray-500">{{ p.sku }}</td>
+          <td class="px-5 py-3 font-bold text-gray-800">{{ p.name }}</td>
+          <td class="px-5 py-3 text-gray-500">{{ p.get_category_display }}</td>
+          <td class="px-5 py-3 text-right text-gray-600">{{ p.production_cost_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="px-5 py-3 text-right font-bold text-gray-800">{{ p.sale_price_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="px-5 py-3 text-right font-bold text-primary-700">{{ p.margin_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="px-5 py-3 text-right">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              +{{ p.margin_percent }}%
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
