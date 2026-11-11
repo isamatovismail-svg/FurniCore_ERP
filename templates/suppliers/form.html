@@ -1,0 +1,71 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb %}Снабжение / Поставщики / {{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-gray-800">{{ page_title }}</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Внесение и корректировка реквизитов поставщика сырья</p>
+    </div>
+    <a href="{% url 'suppliers:index' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      ← Назад к списку
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-6">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Наименование компании *</label>
+        <input type="text" name="name" value="{{ supplier.name|default:'' }}" required placeholder="Например: ТОО «Kastamonu Kazakhstan»"
+               class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Контактное лицо</label>
+          <input type="text" name="contact_person" value="{{ supplier.contact_person|default:'' }}" placeholder="ФИО менеджера"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Номер телефона</label>
+          <input type="text" name="phone" value="{{ supplier.phone|default:'' }}" placeholder="+7 (701) 123-45-67"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+          <input type="email" name="email" value="{{ supplier.email|default:'' }}" placeholder="sales@supplier.kz"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Адрес склада / офиса</label>
+          <input type="text" name="address" value="{{ supplier.address|default:'' }}" placeholder="г. Алматы, Илийский тракт, 12"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Примечания / Условия поставок</label>
+        <textarea name="notes" rows="3" placeholder="Условия отсрочки платежа, график доставки, особенности номенклатуры..."
+                  class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">{{ supplier.notes|default:'' }}</textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+        <a href="{% url 'suppliers:index' %}" class="px-4 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+          Отмена
+        </a>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity" style="background:#173B35;">
+          {% if supplier %}Сохранить изменения{% else %}Зарегистрировать поставщика{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

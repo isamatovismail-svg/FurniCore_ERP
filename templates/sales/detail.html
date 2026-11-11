@@ -1,0 +1,341 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Заказ {{ order.order_number }}{% endblock %}
+{% block breadcrumb %}Продажи / Заказы / {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto" x-data="{ shipModal: false }">
+
+  <!-- Top bar -->
+  <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">{{ order.order_number }}</h1>
+        {% if order.status == 'DRAFT' or order.status == 'NEW' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+          Черновик
+        </span>
+        {% elif order.status == 'CONFIRMED' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          Подтверждён
+        </span>
+        {% elif order.status == 'WAITING_PRODUCTION' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+          Ожидает производства
+        </span>
+        {% elif order.status == 'IN_PRODUCTION' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+          В производстве (Цех)
+        </span>
+        {% elif order.status == 'READY' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          Готов к отгрузке (В резерве WH-2)
+        </span>
+        {% elif order.status == 'PARTIALLY_SHIPPED' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          Частично отгружен
+        </span>
+        {% elif order.status == 'SHIPPED' or order.status == 'DELIVERED' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+          Отгружен клиенту
+        </span>
+        {% elif order.status == 'CANCELLED' %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+          Отменён
+        </span>
+        {% endif %}
+      </div>
+      <p class="text-xs text-gray-400 mt-0.5">Клиент: <b class="text-gray-700">{{ order.customer.name }}</b> | Оформлен: {{ order.created_at|date:"d.m.Y H:i" }}</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'sales:order_pdf' order.id %}" target="_blank" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Спецификация (PDF)
+      </a>
+
+      {% if can_manage %}
+        <!-- Резервирование на WH-2 -->
+        {% if order.can_confirm %}
+        <form method="post" action="{% url 'sales:order_reserve' order.id %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity" style="background:#173B35;">
+            Проверить и зарезервировать WH-2
+          </button>
+        </form>
+        {% endif %}
+
+        <!-- Запуск производства при дефиците -->
+        {% if stock_check.total_deficit_count > 0 and order.status != 'CANCELLED' and order.status != 'SHIPPED' %}
+        <form method="post" action="{% url 'sales:order_create_production' order.id %}" class="inline" onsubmit="return confirm('Сформировать производственные заказы на недостающие позиции?')">
+          {% csrf_token %}
+          <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity bg-amber-600">
+            Запустить производство в цехе ({{ stock_check.total_deficit_count }} поз.)
+          </button>
+        </form>
+        {% endif %}
+
+        <!-- Отгрузка со склада WH-2 -->
+        {% if order.can_ship %}
+        <button type="button" @click="shipModal = true" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity bg-emerald-700">
+          Оформить отгрузку клиенту
+        </button>
+        {% endif %}
+
+        <!-- Отмена заказа -->
+        {% if order.can_cancel %}
+        <form method="post" action="{% url 'sales:order_cancel' order.id %}" class="inline" onsubmit="return confirm('Отменить данный заказ? Зарезервированная мебель на WH-2 будет освобождена.')">
+          {% csrf_token %}
+          <button type="submit" class="px-3.5 py-2 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200">
+            Отменить заказ
+          </button>
+        </form>
+        {% endif %}
+      {% endif %}
+
+      <a href="{% url 'sales:index' %}" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+        К списку
+      </a>
+    </div>
+  </div>
+
+  <!-- Requisites grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+      <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Покупатель / Доставка</div>
+      <div class="text-sm font-bold text-gray-800 mt-1">{{ order.customer.name }}</div>
+      <div class="text-xs text-gray-500 mt-1">Тел: {{ order.customer.phone|default:"—" }}</div>
+      <div class="text-xs text-gray-500">Адрес: {{ order.delivery_address|default:order.customer.address|default:"Самовывоз со склада" }}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+      <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Сроки и менеджер</div>
+      <div class="text-sm font-bold text-gray-800 mt-1">Склад отгрузки: WH-2</div>
+      <div class="text-xs text-gray-500 mt-1">Дата заказа: {{ order.created_at|date:"d.m.Y" }}</div>
+      <div class="text-xs text-gray-500">Срок готовности: {{ order.planned_delivery_date|date:"d.m.Y"|default:"По согласованию" }}</div>
+      <div class="text-xs text-gray-500">Менеджер: {{ order.created_by.get_full_name|default:order.created_by.username|default:"Отдел продаж" }}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+      <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Финансовые расчеты</div>
+      <div class="text-lg font-bold text-gray-900 mt-1">{{ order.total_amount_kzt|floatformat:0|intcomma }} ₸</div>
+      <div class="text-xs text-gray-500 mt-1">Подытог: {{ order.subtotal_amount_kzt|floatformat:0|intcomma }} ₸ (скидка {{ order.discount_percent }}%)</div>
+      <div class="text-xs text-emerald-700 font-semibold">Предоплата: {{ order.deposit_amount_kzt|floatformat:0|intcomma }} ₸</div>
+      {% if order.notes %}
+      <div class="text-xs text-gray-400 mt-1 italic">«{{ order.notes }}»</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- WH-2 Stock Analysis & Items Table -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden mb-6">
+    <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-700">Спецификация и анализ наличия на складе WH-2</h2>
+        <p class="text-[11px] text-gray-400">Сопоставление потребности заказа с фактическими и зарезервированными остатками готовой мебели</p>
+      </div>
+      <div>
+        {% if stock_check.is_fully_available %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+          ✓ Вся продукция доступна на WH-2
+        </span>
+        {% else %}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+          ⚠️ Дефицит на складе: {{ stock_check.total_deficit_count }} поз.
+        </span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-gray-50/80 border-b border-gray-200/80 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+            <th class="py-3 px-4">Артикул</th>
+            <th class="py-3 px-4">Наименование мебели</th>
+            <th class="py-3 px-4 text-center">Заказ</th>
+            <th class="py-3 px-4 text-center">В резерве</th>
+            <th class="py-3 px-4 text-center">Отгружено</th>
+            <th class="py-3 px-4 text-center">Остаток WH-2</th>
+            <th class="py-3 px-4 text-center">Свободно WH-2</th>
+            <th class="py-3 px-4 text-center">Дефицит</th>
+            <th class="py-3 px-4 text-right">Сумма (KZT)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for row in stock_check.items %}
+          <tr class="hover:bg-gray-50/60 transition-colors">
+            <td class="py-3 px-4 font-mono font-medium text-gray-600">
+              {{ row.product.sku }}
+            </td>
+            <td class="py-3 px-4">
+              <a href="{% url 'products:detail' row.product.id %}" class="font-bold text-gray-800 hover:text-primary-700">
+                {{ row.product.name }}
+              </a>
+              {% if row.has_active_bom %}
+              <span class="text-[10px] text-gray-400 block">BOM: {{ row.active_bom.name }} (v{{ row.active_bom.version }})</span>
+              {% else %}
+              <span class="text-[10px] text-red-500 block">Внимание: нет активной техкарты (BOM)!</span>
+              {% endif %}
+            </td>
+            <td class="py-3 px-4 text-center font-bold text-gray-800">
+              {{ row.ordered_qty|floatformat:0 }} шт.
+            </td>
+            <td class="py-3 px-4 text-center font-semibold text-blue-700">
+              {{ row.already_reserved|floatformat:0 }} шт.
+            </td>
+            <td class="py-3 px-4 text-center font-semibold text-purple-700">
+              {{ row.already_shipped|floatformat:0 }} шт.
+            </td>
+            <td class="py-3 px-4 text-center text-gray-600">
+              {{ row.current_stock|floatformat:0 }} шт.
+            </td>
+            <td class="py-3 px-4 text-center font-bold {% if row.available_stock > 0 %}text-emerald-700{% else %}text-gray-400{% endif %}">
+              {{ row.available_stock|floatformat:0 }} шт.
+            </td>
+            <td class="py-3 px-4 text-center font-bold {% if row.deficit_qty > 0 %}text-amber-700 bg-amber-50/50 rounded{% else %}text-gray-400{% endif %}">
+              {% if row.deficit_qty > 0 %}-{{ row.deficit_qty|floatformat:0 }} шт.{% else %}0{% endif %}
+            </td>
+            <td class="py-3 px-4 text-right font-bold text-gray-900">
+              {{ row.item.total_price_kzt|floatformat:0|intcomma }} ₸
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Linked Production Orders & Warehouse Documents Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Linked Production Orders -->
+    <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-700">Связанные производственные заказы</h2>
+        <span class="text-xs text-gray-400">{{ production_orders.count }} заказов в цехе</span>
+      </div>
+      <div class="divide-y divide-gray-100 text-xs">
+        {% for po in production_orders %}
+        <div class="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
+          <div>
+            <a href="{% url 'production:detail' po.id %}" class="font-bold text-gray-900 hover:text-primary-700">
+              {{ po.order_number }}
+            </a>
+            <div class="text-[11px] text-gray-500 mt-0.5">
+              {{ po.product.name }} × {{ po.quantity_planned|floatformat:0 }} шт.
+            </div>
+            <div class="text-[10px] text-gray-400">
+              Выпущено: {{ po.quantity_produced|floatformat:0 }} шт.
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
+              {% if po.status == 'COMPLETED' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+              {% elif po.status == 'IN_PROGRESS' %}bg-amber-50 text-amber-800 border border-amber-200
+              {% else %}bg-gray-100 text-gray-600{% endif %}">
+              {{ po.get_status_display }}
+            </span>
+            <div class="mt-1">
+              <a href="{% url 'production:detail' po.id %}" class="text-[11px] text-primary-700 hover:underline">Цех →</a>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="p-6 text-center text-gray-400 text-xs">
+          Производственные заказы под данный клиентский заказ ещё не открывались.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Linked Warehouse Documents (Reservations, Shipments) -->
+    <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-700">Складские документы WH-2</h2>
+        <span class="text-xs text-gray-400">{{ warehouse_docs.count }} накладных</span>
+      </div>
+      <div class="divide-y divide-gray-100 text-xs">
+        {% for doc in warehouse_docs %}
+        <div class="p-4 flex items-center justify-between hover:bg-gray-50/60 transition-colors">
+          <div>
+            <a href="{% url 'warehouses:document_detail' doc.id %}" class="font-bold text-gray-900 hover:text-primary-700">
+              {{ doc.doc_number }}
+            </a>
+            <div class="text-[11px] text-gray-500 mt-0.5">
+              {{ doc.get_doc_type_display }} ({{ doc.doc_date|date:"d.m.Y" }})
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold text-gray-900">{{ doc.total_amount_kzt|floatformat:0|intcomma }} ₸</div>
+            <a href="{% url 'warehouses:document_detail' doc.id %}" class="text-[11px] text-primary-700 hover:underline">Накладная →</a>
+          </div>
+        </div>
+        {% empty %}
+        <div class="p-6 text-center text-gray-400 text-xs">
+          Складских операций резервирования или отгрузки пока не оформлено.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SHIPMENT MODAL -->
+  <div x-show="shipModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4" style="display:none;">
+    <div @click.outside="shipModal = false" class="bg-white rounded-xl shadow-xl border border-gray-200 max-w-2xl w-full p-6">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+        <div>
+          <h3 class="text-base font-bold text-gray-800">Отгрузка готовой мебели клиенту (WH-2)</h3>
+          <p class="text-xs text-gray-400">По клиентскому заказу {{ order.order_number }}</p>
+        </div>
+        <button type="button" @click="shipModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+
+      <form method="post" action="{% url 'sales:order_ship' order.id %}">
+        {% csrf_token %}
+        <p class="text-xs text-gray-600 mb-3">
+          Укажите количество мебели, отгружаемой покупателю со склада WH-2. Операция сформирует расходную накладную <b>SHIPMENT</b>, спишет остатки и освободит резерв.
+        </p>
+
+        <div class="space-y-3 max-h-72 overflow-y-auto mb-4 pr-1">
+          {% for it in items %}
+          {% if it.remaining_to_ship > 0 %}
+          <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between gap-3 text-xs">
+            <div class="flex-1">
+              <div class="font-bold text-gray-800">{{ it.product.name }}</div>
+              <div class="text-[11px] text-gray-400">
+                Заказано: {{ it.quantity|floatformat:0 }} шт. | Уже отгружено: {{ it.shipped_quantity|floatformat:0 }} шт. |
+                Осталось отгрузить: <b class="text-amber-700">{{ it.remaining_to_ship|floatformat:0 }} шт.</b>
+              </div>
+            </div>
+            <div class="w-32">
+              <input type="number" step="1" min="0" max="{{ it.remaining_to_ship }}"
+                     name="qty_{{ it.id }}" value="{{ it.remaining_to_ship }}"
+                     class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 text-right outline-none focus:border-primary-600 bg-white font-bold">
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Номер ТТН / Примечания к отгрузке</label>
+          <input type="text" name="doc_notes" placeholder="Отгружено через курьерскую службу / Экспедитор Иванов..."
+                 class="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none focus:border-primary-600">
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+          <button type="button" @click="shipModal = false" class="px-4 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+            Отмена
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity bg-emerald-700">
+            Провести отгрузку на WH-2
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

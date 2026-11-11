@@ -53,6 +53,7 @@ class Material(models.Model):
         related_name='materials',
         verbose_name='Основной поставщик',
     )
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата заведения')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата изменения')
 

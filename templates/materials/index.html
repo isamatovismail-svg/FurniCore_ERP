@@ -1,92 +1,130 @@
 {% extends "layouts/base.html" %}
 {% load humanize %}
 
-{% block title %}Материалы{% endblock %}
+{% block title %}Материалы и сырьё{% endblock %}
+{% block breadcrumb %}Склад / Каталог сырья и материалов{% endblock %}
 
 {% block content %}
 
-<!-- Search + filter bar -->
-<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
-  <form method="get" class="flex flex-wrap gap-3 items-end">
+<!-- Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">Материалы и сырьё (WH-1)</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Номенклатурный справочник плитных материалов, фурнитуры, кромок, лаков и текстиля</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{% url 'warehouses:wh1' %}" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      Склад сырья WH-1 →
+    </a>
+    {% if can_manage %}
+    <a href="{% url 'materials:create' %}" class="px-3.5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs transition-opacity hover:opacity-90 flex items-center gap-1.5" style="background:#173B35;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Добавить материал
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tabs & Filter bar -->
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-gray-100">
+    <div class="flex items-center gap-2">
+      <a href="?status=active{% if q %}&q={{ q }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="px-3 py-1.5 rounded-lg text-xs font-semibold {% if status_filter == 'active' %}text-white" style="background:#173B35;{% else %}text-gray-600 bg-gray-100 hover:bg-gray-200{% endif %}">
+        Активная номенклатура ({{ total_active }})
+      </a>
+      <a href="?status=archived{% if q %}&q={{ q }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}" class="px-3 py-1.5 rounded-lg text-xs font-semibold {% if status_filter == 'archived' %}text-white" style="background:#173B35;{% else %}text-gray-600 bg-gray-100 hover:bg-gray-200{% endif %}">
+        В архиве ({{ total_archived }})
+      </a>
+    </div>
+  </div>
+
+  <form method="get" class="flex flex-wrap gap-3 items-center">
+    <input type="hidden" name="status" value="{{ status_filter }}">
     <div class="flex-1 min-w-48">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Поиск</label>
-      <input type="text" name="q" value="{{ q }}" placeholder="Название или артикул..."
-             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none"
-             onfocus="this.style.boxShadow='0 0 0 2px #173B35';" onblur="this.style.boxShadow='';">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск по наименованию, артикулу SKU, штрихкоду или ячейке..."
+             class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 bg-white placeholder-gray-400 outline-none focus:border-primary-600 focus:ring-1 focus:ring-primary-600">
     </div>
     <div class="min-w-48">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Категория</label>
-      <select name="category" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none bg-white">
-        <option value="">Все категории</option>
+      <select name="category" class="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs bg-white outline-none focus:border-primary-600">
+        <option value="">Все категории материалов</option>
         {% for val, label in categories %}
         <option value="{{ val }}" {% if selected_category == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>
-    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:#173B35;">
+    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition-opacity" style="background:#173B35;">
       Найти
     </button>
     {% if q or selected_category %}
-    <a href="{% url 'materials:index' %}" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50">
+    <a href="?status={{ status_filter }}" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
       Сбросить
     </a>
     {% endif %}
   </form>
 </div>
 
-<!-- Stats -->
-<div class="flex items-center gap-4 mb-4 text-sm text-gray-500">
-  <span>Найдено: <strong style="color:#252D29;">{{ total_count }}</strong> позиций</span>
-  {% if q %}<span>· Поиск: «{{ q }}»</span>{% endif %}
-</div>
-
 <!-- Materials table -->
-<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
   <div class="overflow-x-auto">
-    <table class="w-full text-sm">
+    <table class="w-full text-xs text-left border-collapse">
       <thead>
-        <tr class="bg-gray-50 border-b border-gray-100">
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">SKU</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Наименование</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Категория</th>
-          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Остаток</th>
-          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Мин.запас</th>
-          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Цена ед.</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Поставщик</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ячейка</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Статус</th>
+        <tr class="bg-gray-50/80 border-b border-gray-200/80 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+          <th class="py-3 px-4">SKU / Артикул</th>
+          <th class="py-3 px-4">Наименование</th>
+          <th class="py-3 px-4">Категория</th>
+          <th class="py-3 px-4 text-right">Остаток WH-1</th>
+          <th class="py-3 px-4 text-right">Мин. буфер</th>
+          <th class="py-3 px-4 text-right">Цена закупки</th>
+          <th class="py-3 px-4">Поставщик</th>
+          <th class="py-3 px-4">Ячейка</th>
+          <th class="py-3 px-4 text-center">Статус</th>
+          <th class="py-3 px-4 text-right">Действия</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-50">
+      <tbody class="divide-y divide-gray-100">
         {% for item in materials_with_stock %}
         {% with mat=item.material %}
-        <tr class="hover:bg-gray-50 transition-colors {% if item.low %}bg-red-50 hover:bg-red-50{% endif %}">
-          <td class="px-5 py-3 font-mono text-xs text-gray-500">{{ mat.sku }}</td>
-          <td class="px-5 py-3">
-            <div class="font-medium text-xs" style="color:#252D29;">{{ mat.name }}</div>
+        <tr class="hover:bg-gray-50/60 transition-colors {% if item.low %}bg-red-50/30{% endif %}">
+          <td class="py-3 px-4 font-mono font-medium text-gray-600">{{ mat.sku }}</td>
+          <td class="py-3 px-4">
+            <div class="font-bold text-gray-800">{{ mat.name }}</div>
+            {% if mat.barcode %}<div class="text-[10px] text-gray-400 font-mono">{{ mat.barcode }}</div>{% endif %}
           </td>
-          <td class="px-5 py-3 text-xs text-gray-500">{{ mat.get_category_display }}</td>
-          <td class="px-5 py-3 text-right text-xs font-semibold {% if item.low %}text-red-600{% else %}text-gray-800{% endif %}">
+          <td class="py-3 px-4 text-gray-500">{{ mat.get_category_display }}</td>
+          <td class="py-3 px-4 text-right font-bold {% if item.low %}text-red-600{% else %}text-gray-800{% endif %}">
             {{ item.stock|floatformat:1 }} {{ mat.unit }}
           </td>
-          <td class="px-5 py-3 text-right text-xs text-gray-500">{{ mat.min_stock_level|floatformat:1 }}</td>
-          <td class="px-5 py-3 text-right text-xs" style="color:#252D29;">{{ mat.purchase_cost_kzt|floatformat:0|intcomma }} ₸</td>
-          <td class="px-5 py-3 text-xs text-gray-500">{{ mat.supplier.name|default:"—"|truncatechars:25 }}</td>
-          <td class="px-5 py-3 text-xs font-mono text-gray-500">{{ mat.location|default:"—" }}</td>
-          <td class="px-5 py-3">
-            {% if item.low %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">⚠ Мало</span>
+          <td class="py-3 px-4 text-right text-gray-500">{{ mat.min_stock_level|floatformat:1 }} {{ mat.unit }}</td>
+          <td class="py-3 px-4 text-right font-semibold text-gray-900">{{ mat.purchase_cost_kzt|floatformat:0|intcomma }} ₸</td>
+          <td class="py-3 px-4 text-gray-600">{{ mat.supplier.name|default:"—"|truncatechars:20 }}</td>
+          <td class="py-3 px-4 font-mono text-gray-500">{{ mat.location|default:"—" }}</td>
+          <td class="py-3 px-4 text-center">
+            {% if not mat.is_active %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">В архиве</span>
+            {% elif item.low %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">⚠ Дефицит</span>
             {% else %}
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">ОК</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Норма</span>
+            {% endif %}
+          </td>
+          <td class="py-3 px-4 text-right">
+            {% if can_manage %}
+            <div class="flex items-center justify-end gap-1.5">
+              <a href="{% url 'materials:edit' mat.id %}" class="px-2 py-1 rounded text-[11px] font-medium bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200">
+                Изменить
+              </a>
+              <a href="{% url 'materials:archive' mat.id %}" onclick="return confirm('Изменить статус активности материала?')" class="px-2 py-1 rounded text-[11px] font-medium {% if mat.is_active %}text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200{% else %}text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200{% endif %}">
+                {% if mat.is_active %}В архив{% else %}Восстановить{% endif %}
+              </a>
+            </div>
             {% endif %}
           </td>
         </tr>
         {% endwith %}
         {% empty %}
         <tr>
-          <td colspan="9" class="px-5 py-12 text-center text-gray-400">
-            <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-            Материалы не найдены
+          <td colspan="10" class="py-12 text-center text-gray-400">
+            Материалы не найдены.
           </td>
         </tr>
         {% endfor %}

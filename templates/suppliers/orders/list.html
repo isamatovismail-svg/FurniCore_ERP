@@ -1,0 +1,161 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Заказы поставщикам{% endblock %}
+{% block breadcrumb %}Снабжение / Заказы поставщикам{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-800">Заказы поставщикам (Снабжение)</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Управление закупками сырья, фурнитуры и комплектующих с приёмкой на склад WH-1</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="{% url 'suppliers:index' %}" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      База поставщиков
+    </a>
+    {% if can_manage %}
+    <a href="{% url 'suppliers:order_create' %}" class="px-3.5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs transition-opacity hover:opacity-90 flex items-center gap-1.5" style="background:#173B35;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Создать заказ на закупку
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+    <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Всего заказов</div>
+    <div class="text-xl font-bold text-gray-800 mt-1">{{ total_orders }}</div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+    <div class="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Черновики</div>
+    <div class="text-xl font-bold text-amber-700 mt-1">{{ draft_orders }}</div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+    <div class="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">В пути / Ожидают</div>
+    <div class="text-xl font-bold text-blue-700 mt-1">{{ active_orders }}</div>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
+    <div class="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Принято на склад</div>
+    <div class="text-xl font-bold text-emerald-700 mt-1">{{ received_orders }}</div>
+  </div>
+</div>
+
+<!-- Filter & Search -->
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 mb-6">
+  <form method="get" class="flex flex-wrap gap-3 items-center">
+    <div class="flex-1 min-w-48">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск по номеру заказа, поставщику, комментариям..."
+             class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 bg-white placeholder-gray-400 outline-none focus:border-primary-600 focus:ring-1 focus:ring-primary-600">
+    </div>
+
+    <select name="status" class="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none focus:border-primary-600">
+      <option value="">Все статусы</option>
+      {% for code, label in statuses %}
+      <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition-opacity" style="background:#173B35;">
+      Фильтровать
+    </button>
+    {% if q or status_filter %}
+    <a href="{% url 'suppliers:order_list' %}" class="px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+      Сбросить
+    </a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Table -->
+<div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse text-xs">
+      <thead>
+        <tr class="bg-gray-50/80 border-b border-gray-200/80 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+          <th class="py-3 px-4">Номер заказа</th>
+          <th class="py-3 px-4">Поставщик</th>
+          <th class="py-3 px-4">Дата заказа</th>
+          <th class="py-3 px-4">Срок поставки</th>
+          <th class="py-3 px-4 text-center">Позиций</th>
+          <th class="py-3 px-4 text-right">Сумма (KZT)</th>
+          <th class="py-3 px-4 text-center">Статус</th>
+          <th class="py-3 px-4 text-right">Действия</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for order in orders %}
+        <tr class="hover:bg-gray-50/60 transition-colors">
+          <td class="py-3 px-4">
+            <a href="{% url 'suppliers:order_detail' order.id %}" class="font-bold text-gray-900 hover:text-primary-700">
+              {{ order.order_number }}
+            </a>
+          </td>
+          <td class="py-3 px-4 font-medium text-gray-800">
+            {{ order.supplier.name }}
+          </td>
+          <td class="py-3 px-4 text-gray-500">
+            {{ order.order_date|date:"d.m.Y" }}
+          </td>
+          <td class="py-3 px-4 text-gray-500">
+            {{ order.planned_delivery_date|date:"d.m.Y"|default:"—" }}
+          </td>
+          <td class="py-3 px-4 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">
+              {{ order.items.count }}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right font-bold text-gray-900">
+            {{ order.total_amount_kzt|intcomma }} ₸
+          </td>
+          <td class="py-3 px-4 text-center">
+            {% if order.status == 'DRAFT' %}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+              Черновик
+            </span>
+            {% elif order.status == 'SENT' %}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              Отправлен
+            </span>
+            {% elif order.status == 'PARTIALLY_RECEIVED' %}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+              Частично получен
+            </span>
+            {% elif order.status == 'RECEIVED' %}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              Получен полностью
+            </span>
+            {% elif order.status == 'CANCELLED' %}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+              Отменён
+            </span>
+            {% endif %}
+          </td>
+          <td class="py-3 px-4 text-right">
+            <div class="flex items-center justify-end gap-1.5">
+              <a href="{% url 'suppliers:order_detail' order.id %}" class="px-2 py-1 rounded text-[11px] font-medium bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200">
+                Детали
+              </a>
+              <a href="{% url 'suppliers:order_pdf' order.id %}" target="_blank" class="px-2 py-1 rounded text-[11px] font-medium bg-white hover:bg-gray-50 text-gray-600 border border-gray-200" title="Печать PDF">
+                PDF
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="py-12 text-center text-gray-400">
+            Заказы поставщикам не найдены.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

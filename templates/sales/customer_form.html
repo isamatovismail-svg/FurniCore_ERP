@@ -1,0 +1,79 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'sales:customers' %}" class="hover:text-primary-700">Клиенты</a> / {{ page_title }}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-gray-800">{{ page_title }}</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Карточка покупателя и контрагента CRM</p>
+    </div>
+    <a href="{% url 'sales:customers' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      ← К списку клиентов
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-6">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">ФИО клиента / Представителя *</label>
+        <input type="text" name="full_name" value="{{ customer.full_name|default:'' }}" required placeholder="Например: Сейфуллин Арман Болатович"
+               class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Юридическое лицо / Компания (если применимо)</label>
+        <input type="text" name="company_name" value="{{ customer.company_name|default:'' }}" placeholder="ТОО «Дизайн Интерьер Плюс»"
+               class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Номер телефона</label>
+          <input type="text" name="phone" value="{{ customer.phone|default:'' }}" placeholder="+7 (777) 123-45-67"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+          <input type="email" name="email" value="{{ customer.email|default:'' }}" placeholder="client@example.kz"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Город</label>
+          <input type="text" name="city" value="{{ customer.city|default:'Алматы' }}" placeholder="г. Алматы"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Основной адрес доставки</label>
+          <input type="text" name="address" value="{{ customer.address|default:'' }}" placeholder="мкр. Самал-2, д. 45"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Примечания и пожелания клиента</label>
+        <textarea name="notes" rows="3" placeholder="Особые пожелания по текстилю, время звонков, скидки постоянного клиента..."
+                  class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">{{ customer.notes|default:'' }}</textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+        <a href="{% url 'sales:customers' %}" class="px-4 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+          Отмена
+        </a>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity" style="background:#173B35;">
+          {% if customer %}Сохранить изменения{% else %}Зарегистрировать клиента{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

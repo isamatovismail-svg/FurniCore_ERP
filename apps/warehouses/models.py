@@ -131,6 +131,10 @@ class WarehouseDocument(models.Model):
         'suppliers.Supplier', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='warehouse_documents', verbose_name='Поставщик сырья'
     )
+    purchase_order = models.ForeignKey(
+        'suppliers.PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='warehouse_documents', verbose_name='Заказ на закупку'
+    )
     customer = models.ForeignKey(
         'sales.Customer', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='warehouse_documents', verbose_name='Клиент'
