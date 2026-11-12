@@ -56,6 +56,14 @@ class FinancialAccount(models.Model):
     def __str__(self):
         return f'{self.name} ({self.current_balance_kzt:,.2f} ₸)'
 
+    @property
+    def balance_kzt(self):
+        return self.current_balance_kzt
+
+    @balance_kzt.setter
+    def balance_kzt(self, value):
+        self.current_balance_kzt = value
+
 
 class CustomerPayment(models.Model):
     """Поступление оплаты от клиента по заказу покупателя."""

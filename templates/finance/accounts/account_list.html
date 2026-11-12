@@ -1,0 +1,132 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Счета и кассы | FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-gray-100">
+    <div>
+      <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+        <a href="{% url 'finance:index' %}" class="hover:underline">Финансы</a>
+        <span>/</span>
+        <span>Казначейство</span>
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight" style="color:#173B35;">Счета и кассы фабрики</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Управление денежными средствами, кассами и банковскими счетами</p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="{% url 'finance:account_transfer' %}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg text-white shadow-sm"
+         style="background:#173B35;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+        Внутренний перевод
+      </a>
+    </div>
+  </div>
+
+  <!-- Total Summary Card -->
+  <div class="bg-gradient-to-r from-[#173B35] to-[#285F4D] rounded-xl p-6 text-white shadow-sm">
+    <div class="text-xs uppercase font-semibold text-emerald-200 tracking-wider">Всего доступных ликвидных средств</div>
+    <div class="text-3xl font-extrabold tracking-tight mt-1">
+      {{ total_balance|floatformat:2|intcomma }} ₸
+    </div>
+    <div class="text-xs text-emerald-100/80 mt-2">
+      Суммарный остаток во всех действующих кассах и на расчётных счетах фабрики
+    </div>
+  </div>
+
+  <!-- Accounts Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    {% for acc in accounts %}
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            {{ acc.get_type_display }}
+          </span>
+          {% if acc.is_active %}
+          <span class="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Активен
+          </span>
+          {% else %}
+          <span class="text-[11px] text-gray-400 font-medium">Неактивен</span>
+          {% endif %}
+        </div>
+        <h3 class="text-base font-bold text-gray-900 mt-2">{{ acc.name }}</h3>
+        <p class="text-xs text-gray-400 font-mono mt-0.5">{{ acc.account_number|default:"Без IBAN (наличные)" }}</p>
+      </div>
+
+      <div class="mt-6 pt-4 border-t border-gray-100">
+        <div class="text-xs text-gray-500">Текущий остаток:</div>
+        <div class="text-2xl font-bold tracking-tight" style="color:#173B35;">
+          {{ acc.balance_kzt|floatformat:2|intcomma }} ₸
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Recent Transfers Table -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-gray-800">История межбанковских и внутренних переводов</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="px-5 py-3 font-semibold">Номер</th>
+            <th class="px-5 py-3 font-semibold">Дата</th>
+            <th class="px-5 py-3 font-semibold">Со счёта</th>
+            <th class="px-5 py-3 font-semibold">На счёт</th>
+            <th class="px-5 py-3 font-semibold text-right">Сумма (₸)</th>
+            <th class="px-5 py-3 font-semibold">Назначение</th>
+            <th class="px-5 py-3 font-semibold">Инициатор</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for tr in recent_transfers %}
+          <tr class="hover:bg-gray-50/70 transition-colors">
+            <td class="px-5 py-3.5 font-bold" style="color:#173B35;">
+              {{ tr.transfer_number }}
+            </td>
+            <td class="px-5 py-3.5 text-gray-500">
+              {{ tr.transfer_date|date:"d.m.Y H:i" }}
+            </td>
+            <td class="px-5 py-3.5 font-medium text-gray-800">
+              {{ tr.from_account.name }}
+            </td>
+            <td class="px-5 py-3.5 font-medium text-gray-800">
+              {{ tr.to_account.name }}
+            </td>
+            <td class="px-5 py-3.5 text-right font-bold text-gray-900">
+              {{ tr.amount_kzt|floatformat:2|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-gray-500">
+              {{ tr.notes|default:"Перемещение средств" }}
+            </td>
+            <td class="px-5 py-3.5 text-gray-500">
+              {{ tr.created_by.get_full_name|default:tr.created_by.username }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-5 py-8 text-center text-gray-400">
+              Внутренние переводы ещё не совершались
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

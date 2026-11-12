@@ -394,7 +394,8 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         headers = ["Клиент", "Телефон", "Номер заказа", "Дата заказа", "Сумма заказа (₸)", "Оплачено (₸)", "Долг (₸)", "Статус оплаты"]
         ws.append(headers)
 
-        orders = SalesOrder.objects.filter(remaining_debt_kzt__gt=Decimal('0')).select_related('customer').order_by('-remaining_debt_kzt')
+        active_orders = SalesOrder.objects.exclude(status='CANCELLED').select_related('customer').order_by('-created_at')
+        orders = [o for o in active_orders if o.remaining_debt_kzt > Decimal('0.00')]
         for o in orders:
             ws.append([
                 o.customer.name if o.customer else "—",
@@ -416,7 +417,8 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         headers = ["Поставщик", "Контакты", "Заказ закупки", "Дата", "Сумма закупки (₸)", "Выплачено (₸)", "Долг фабрики (₸)", "Статус"]
         ws.append(headers)
 
-        pos = PurchaseOrder.objects.filter(remaining_debt_kzt__gt=Decimal('0')).select_related('supplier').order_by('-remaining_debt_kzt')
+        active_pos = PurchaseOrder.objects.exclude(status='CANCELLED').select_related('supplier').order_by('-order_date')
+        pos = [p for p in active_pos if p.remaining_debt_kzt > Decimal('0.00')]
         for p in pos:
             ws.append([
                 p.supplier.name if p.supplier else "—",

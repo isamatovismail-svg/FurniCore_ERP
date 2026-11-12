@@ -476,8 +476,10 @@ def record_general_income(
 # СВОДНЫЕ ФИНАНСОВЫЕ KPI И РАСЧЁТЫ
 # ==============================================================================
 
-def get_financial_dashboard_kpis(date_from=None, date_to=None) -> dict:
+def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, end_date=None) -> dict:
     """Расчёт финансовых показателей за период (начисление vs кассовый метод, задолженности)."""
+    date_from = date_from or start_date
+    date_to = date_to or end_date
     # 1. Доходы по начислению (Accrual Revenue)
     sales_qs = SalesOrder.objects.filter(
         status__in=[OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.PARTIALLY_SHIPPED, OrderStatus.SHIPPED, OrderStatus.DELIVERED]
@@ -645,17 +647,29 @@ def calculate_production_order_actual_cost(order: ProductionOrder) -> dict:
 
     return {
         'planned_cost': order.planned_cost_kzt,
+        'planned_cost_kzt': order.planned_cost_kzt,
         'planned_materials': order.planned_materials_cost_kzt,
+        'planned_materials_cost_kzt': order.planned_materials_cost_kzt,
         'planned_labor': order.planned_labor_cost_kzt,
+        'planned_labor_cost_kzt': order.planned_labor_cost_kzt,
         'planned_overhead': order.overhead_cost_kzt,
+        'planned_overhead_cost_kzt': order.overhead_cost_kzt,
         'actual_materials': actual_materials_cost,
+        'actual_materials_cost_kzt': actual_materials_cost,
         'actual_labor': actual_labor_cost,
+        'actual_labor_cost_kzt': actual_labor_cost,
         'actual_overhead': overhead_cost,
+        'actual_overhead_cost_kzt': overhead_cost,
+        'labor_and_overhead_cost_kzt': actual_labor_cost + overhead_cost,
         'waste_cost': waste_cost,
+        'waste_cost_kzt': waste_cost,
         'actual_total_cost': actual_total_cost,
+        'total_actual_cost_kzt': actual_total_cost,
         'quantity_produced': qty_produced,
         'unit_cost': unit_cost,
+        'actual_unit_cost_kzt': unit_cost,
         'cost_variance': cost_variance,
+        'cost_variance_kzt': cost_variance,
         'variance_pct': variance_pct,
         'is_over_budget': cost_variance > Decimal('0.00'),
     }

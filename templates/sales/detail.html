@@ -51,6 +51,12 @@
 
     <!-- Actions -->
     <div class="flex flex-wrap items-center gap-2">
+      <a href="{% url 'finance:customer_payment_create' %}?order_id={{ order.id }}"
+         class="px-3.5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs flex items-center gap-1.5"
+         style="background:#173B35;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Принять оплату
+      </a>
       <a href="{% url 'sales:order_pdf' order.id %}" target="_blank" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs flex items-center gap-1.5">
         <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
         Спецификация (PDF)
@@ -117,10 +123,15 @@
       <div class="text-xs text-gray-500">Менеджер: {{ order.created_by.get_full_name|default:order.created_by.username|default:"Отдел продаж" }}</div>
     </div>
     <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
-      <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Финансовые расчеты</div>
+      <div class="flex items-center justify-between">
+        <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Финансовые расчеты</div>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full {% if order.payment_status == 'PAID' %}bg-emerald-100 text-emerald-800{% elif order.payment_status == 'PARTIALLY_PAID' %}bg-amber-100 text-amber-800{% else %}bg-red-100 text-red-800{% endif %}">
+          {{ order.get_payment_status_display }}
+        </span>
+      </div>
       <div class="text-lg font-bold text-gray-900 mt-1">{{ order.total_amount_kzt|floatformat:0|intcomma }} ₸</div>
-      <div class="text-xs text-gray-500 mt-1">Подытог: {{ order.subtotal_amount_kzt|floatformat:0|intcomma }} ₸ (скидка {{ order.discount_percent }}%)</div>
-      <div class="text-xs text-emerald-700 font-semibold">Предоплата: {{ order.deposit_amount_kzt|floatformat:0|intcomma }} ₸</div>
+      <div class="text-xs text-gray-500 mt-1">Оплачено: <span class="font-bold text-emerald-700">{{ order.paid_amount_kzt|floatformat:0|intcomma }} ₸</span></div>
+      <div class="text-xs text-red-600 font-semibold">Остаток долга: {{ order.remaining_debt_kzt|floatformat:0|intcomma }} ₸</div>
       {% if order.notes %}
       <div class="text-xs text-gray-400 mt-1 italic">«{{ order.notes }}»</div>
       {% endif %}

@@ -1,0 +1,138 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+
+{% block title %}Себестоимость производства | FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-gray-100">
+    <div>
+      <div class="flex items-center gap-2 text-xs text-gray-500 mb-1">
+        <a href="{% url 'finance:index' %}" class="hover:underline">Финансы</a>
+        <span>/</span>
+        <span>Калькуляция себестоимости</span>
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight" style="color:#173B35;">Себестоимость производства</h1>
+      <p class="text-xs text-gray-500 mt-0.5">Фактическая себестоимость партий мебели: сырьё со склада WH-1, ФОТ мастеров, накладные расходы и анализ отклонений от нормы BOM</p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="{% url 'finance:export_excel' %}?type=costing"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-sm">
+        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Выгрузить Excel
+      </a>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+      <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Суммарная себестоимость выборки</div>
+      <div class="text-2xl font-bold tracking-tight" style="color:#173B35;">
+        {{ total_actual_costs|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Фактические затраты на материалы, оплату труда и накладные расходы</div>
+    </div>
+
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+      <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Суммарное отклонение от планового BOM</div>
+      <div class="text-2xl font-bold tracking-tight {% if total_cost_variances <= 0 %}text-emerald-700{% else %}text-amber-700{% endif %}">
+        {% if total_cost_variances > 0 %}+{% endif %}{{ total_cost_variances|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">
+        {% if total_cost_variances > 0 %}Перерасход сырья относительно технологических карт{% else %}Экономия материалов или производство в пределах нормы{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <form method="get" class="flex gap-3">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск по номеру заказа, артикулу или названию мебели..."
+             class="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs outline-none bg-white">
+      <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-sm" style="background:#173B35;">
+        Найти
+      </button>
+      {% if q %}
+      <a href="{% url 'finance:order_costs' %}" class="px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+        Сбросить
+      </a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-gray-800">Калькуляция производственных заказов: {{ orders_cost_data|length }}</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="px-5 py-3 font-semibold">Заказ цеха</th>
+            <th class="px-5 py-3 font-semibold">Изделие мебели</th>
+            <th class="px-5 py-3 font-semibold text-center">Кол-во</th>
+            <th class="px-5 py-3 font-semibold text-right">План. мат-лы (₸)</th>
+            <th class="px-5 py-3 font-semibold text-right">Факт. мат-лы (₸)</th>
+            <th class="px-5 py-3 font-semibold text-right">ФОТ и цех (₸)</th>
+            <th class="px-5 py-3 font-semibold text-right">Итого с/с (₸)</th>
+            <th class="px-5 py-3 font-semibold text-right">С/с ед. (₸)</th>
+            <th class="px-5 py-3 font-semibold text-right">Отклонение (₸)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for item in orders_cost_data %}
+          <tr class="hover:bg-gray-50/70 transition-colors">
+            <td class="px-5 py-3.5 font-bold" style="color:#173B35;">
+              <a href="{% url 'production:order_detail' item.order.pk %}" class="hover:underline">
+                {{ item.order.order_number }}
+              </a>
+              <div class="text-[10px] text-gray-400 font-normal">{{ item.order.get_status_display }}</div>
+            </td>
+            <td class="px-5 py-3.5 font-medium text-gray-900">
+              {{ item.order.product.name }}
+              <div class="text-[10px] text-gray-400 font-mono">{{ item.order.product.sku }}</div>
+            </td>
+            <td class="px-5 py-3.5 text-center font-bold text-gray-800">
+              {{ item.order.quantity }} шт.
+            </td>
+            <td class="px-5 py-3.5 text-right text-gray-600">
+              {{ item.cost.planned_materials_cost_kzt|floatformat:0|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-right font-medium text-gray-900">
+              {{ item.cost.actual_materials_cost_kzt|floatformat:0|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-right text-gray-600">
+              {{ item.cost.labor_and_overhead_cost_kzt|floatformat:0|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-right font-bold text-gray-900">
+              {{ item.cost.total_actual_cost_kzt|floatformat:0|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-right font-bold text-emerald-800">
+              {{ item.cost.actual_unit_cost_kzt|floatformat:0|intcomma }} ₸
+            </td>
+            <td class="px-5 py-3.5 text-right font-bold {% if item.cost.cost_variance_kzt > 0 %}text-amber-700{% else %}text-emerald-700{% endif %}">
+              {% if item.cost.cost_variance_kzt > 0 %}+{% endif %}{{ item.cost.cost_variance_kzt|floatformat:0|intcomma }} ₸
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" class="px-5 py-10 text-center text-gray-400">
+              Производственные заказы не найдены
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

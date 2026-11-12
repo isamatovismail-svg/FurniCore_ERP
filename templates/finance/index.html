@@ -1,159 +1,383 @@
 {% extends "layouts/base.html" %}
 {% load humanize %}
 
-{% block title %}Финансы{% endblock %}
+{% block title %}Финансовый центр | FurniCore ERP{% endblock %}
 
 {% block content %}
+<div class="space-y-6">
 
-<!-- Financial summary cards -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <!-- Total Revenue -->
-  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Доходы (Выручка)</span>
-      <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#E8F0EE;">
-        <svg class="w-4 h-4" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      </div>
+  <!-- Header & Actions -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-gray-100">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight" style="color:#173B35;">Финансовый центр</h1>
+      <p class="text-xs text-gray-500 mt-1">Казначейство, учёт доходов и расходов, P&L, Cash Flow и себестоимость</p>
     </div>
-    <div class="text-2xl font-bold" style="color:#173B35;">{{ total_revenue|floatformat:0|intcomma }} ₸</div>
-    <div class="text-xs text-gray-400 mt-1">Оплаченные и проведённые заказы</div>
-  </div>
+    
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Quick Actions -->
+      <a href="{% url 'finance:customer_payment_create' %}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg text-white shadow-sm transition-colors"
+         style="background:#173B35;">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Принять оплату
+      </a>
 
-  <!-- Total Expenses -->
-  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Расходы предприятия</span>
-      <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#FEF3C7;">
-        <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <a href="{% url 'finance:supplier_payment_create' %}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
         </svg>
-      </div>
-    </div>
-    <div class="text-2xl font-bold" style="color:#252D29;">{{ grand_total_expenses|floatformat:0|intcomma }} ₸</div>
-    <div class="text-xs text-gray-400 mt-1">Все подтверждённые платежи</div>
-  </div>
+        Оплатить поставщику
+      </a>
 
-  <!-- Net Result -->
-  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Финансовый результат</span>
-      <div class="w-8 h-8 rounded-lg flex items-center justify-center"
-           {% if net_profit >= 0 %}style="background:#D1FAE5;"{% else %}style="background:#FEE2E2;"{% endif %}>
-        <svg class="w-4 h-4 {% if net_profit >= 0 %}text-green-600{% else %}text-red-500{% endif %}"
-             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="{% if net_profit >= 0 %}M13 7h8m0 0v8m0-8l-8 8-4-4-6 6{% else %}M13 17h8m0 0V9m0 8l-8-8-4 4-6-6{% endif %}"/>
+      <a href="{% url 'finance:expense_create' %}"
+         class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
+        Расход
+      </a>
+
+      <div class="relative" x-data="{ open: false }">
+        <button @click="open = !open"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-colors">
+          <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Выгрузка Excel
+          <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div x-show="open" @click.away="open = false"
+             class="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-gray-100 py-1.5 z-20 text-xs text-gray-700">
+          <a href="{% url 'finance:export_excel' %}?type=pandl&period={{ period }}" class="block px-4 py-2 hover:bg-gray-50">Отчёт P&L (Прибыли и убытки)</a>
+          <a href="{% url 'finance:export_excel' %}?type=cashflow&period={{ period }}" class="block px-4 py-2 hover:bg-gray-50">Отчёт ДДС (Cash Flow)</a>
+          <a href="{% url 'finance:export_excel' %}?type=receivables" class="block px-4 py-2 hover:bg-gray-50">Дебиторская задолженность</a>
+          <a href="{% url 'finance:export_excel' %}?type=payables" class="block px-4 py-2 hover:bg-gray-50">Кредиторская задолженность</a>
+          <a href="{% url 'finance:export_excel' %}?type=costing" class="block px-4 py-2 hover:bg-gray-50">Себестоимость производства</a>
+        </div>
       </div>
     </div>
-    <div class="text-2xl font-bold {% if net_profit >= 0 %}text-green-600{% else %}text-red-500{% endif %}">
-      {{ net_profit|floatformat:0|intcomma }} ₸
-    </div>
-    <div class="text-xs text-gray-400 mt-1">Выручка минус расходы</div>
   </div>
 
-  <!-- Operational stat -->
-  <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-    <div class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Всего операций</div>
-    <div class="text-2xl font-bold" style="color:#252D29;">{{ total_transactions }}</div>
-    <div class="text-xs text-gray-400 mt-1">Проведённых платёжных записей</div>
+  <!-- Sub-navigation links -->
+  <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 pb-3 text-xs font-medium">
+    <a href="{% url 'finance:index' %}" class="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 font-semibold">Обзор</a>
+    <a href="{% url 'finance:customer_payments' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Платежи покупателей</a>
+    <a href="{% url 'finance:supplier_payments' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Оплаты поставщикам</a>
+    <a href="{% url 'finance:accounts' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Счета и кассы</a>
+    <a href="{% url 'finance:expenses' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Расходы</a>
+    <a href="{% url 'finance:receivables' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Дебиторка</a>
+    <a href="{% url 'finance:payables' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Кредиторка</a>
+    <a href="{% url 'finance:order_costs' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Себестоимость</a>
   </div>
-</div>
 
-<!-- Breakdown by categories -->
-<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
-  <h3 class="text-sm font-semibold mb-4" style="color:#252D29;">Структура расходов фабрики</h3>
+  <!-- Period Filter -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <form method="get" class="flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div class="flex items-center gap-1.5 overflow-x-auto py-1">
+        <span class="text-gray-400 font-medium mr-1">Период:</span>
+        <a href="?period=all" class="px-3 py-1.5 rounded-lg font-medium transition-colors {% if period == 'all' %}bg-emerald-900 text-white font-semibold{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Всё время</a>
+        <a href="?period=today" class="px-3 py-1.5 rounded-lg font-medium transition-colors {% if period == 'today' %}bg-emerald-900 text-white font-semibold{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Сегодня</a>
+        <a href="?period=this_week" class="px-3 py-1.5 rounded-lg font-medium transition-colors {% if period == 'this_week' %}bg-emerald-900 text-white font-semibold{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Эта неделя</a>
+        <a href="?period=this_month" class="px-3 py-1.5 rounded-lg font-medium transition-colors {% if period == 'this_month' %}bg-emerald-900 text-white font-semibold{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Этот месяц</a>
+        <a href="?period=this_year" class="px-3 py-1.5 rounded-lg font-medium transition-colors {% if period == 'this_year' %}bg-emerald-900 text-white font-semibold{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Этот год</a>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="hidden" name="period" value="custom">
+        <input type="date" name="start_date" value="{{ start_date }}" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none">
+        <span class="text-gray-400">—</span>
+        <input type="date" name="end_date" value="{{ end_date }}" class="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none">
+        <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm" style="background:#173B35;">
+          Применить
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Primary Financial Metrics: P&L & Cash Flow -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    {% for cat in categories_breakdown %}
-    <div class="p-3.5 rounded-lg border border-gray-100 bg-gray-50">
-      <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-        <span class="font-medium text-gray-700 truncate" title="{{ cat.label }}">{{ cat.label }}</span>
-        <span class="font-bold text-gray-600 ml-2">{{ cat.percent }}%</span>
-      </div>
-      <div class="text-base font-bold" style="color:#173B35;">{{ cat.total|floatformat:0|intcomma }} ₸</div>
-      <div class="w-full bg-gray-200 h-1 rounded-full mt-2 overflow-hidden">
-        <div class="h-full rounded-full" style="background:#173B35; width:{{ cat.percent }}%;"></div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
 
-<!-- Filters & Search -->
-<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
-  <form method="get" class="flex flex-wrap gap-3 items-end">
-    <div class="flex-1 min-w-48">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Поиск</label>
-      <input type="text" name="q" value="{{ q }}" placeholder="Назначение платежа или контрагент..."
-             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none bg-white"
-             onfocus="this.style.boxShadow='0 0 0 2px #173B35';" onblur="this.style.boxShadow='';">
+    <!-- Accrual Revenue -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Выручка (Начисление)</span>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-800">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-2xl font-bold tracking-tight" style="color:#173B35;">
+        {{ kpis.accrual_revenue_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Подтверждённые заказы покупателей</div>
     </div>
-    <div class="min-w-48">
-      <label class="block text-xs font-medium text-gray-500 mb-1">Статья расходов</label>
-      <select name="category" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white">
-        <option value="">Все статьи</option>
-        {% for val, label in categories %}
-        <option value="{{ val }}" {% if category_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
+
+    <!-- Cash Inflow -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Поступления (ДДС)</span>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 text-blue-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-2xl font-bold tracking-tight text-blue-900">
+        {{ kpis.cash_inflow_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Фактически принято в кассы и банк</div>
     </div>
-    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:#173B35;">
-      Фильтровать
-    </button>
-    {% if q or category_filter %}
-    <a href="{% url 'finance:index' %}" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50">
-      Сбросить
-    </a>
+
+    <!-- Cash Outflow -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Выплаты и расходы</span>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-50 text-amber-700">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-2xl font-bold tracking-tight text-amber-900">
+        {{ kpis.cash_outflow_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">
+        Поставщики: {{ kpis.purchases_total_kzt|floatformat:0|intcomma }} ₸ | Расходы: {{ kpis.cash_expenses_kzt|floatformat:0|intcomma }} ₸
+      </div>
+    </div>
+
+    <!-- Net Profit (P&L) -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Операционная прибыль</span>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center {% if kpis.net_profit_kzt >= 0 %}bg-emerald-50 text-emerald-700{% else %}bg-red-50 text-red-600{% endif %}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="{% if kpis.net_profit_kzt >= 0 %}M13 7h8m0 0v8m0-8l-8 8-4-4-6 6{% else %}M13 17h8m0 0V9m0 8l-8-8-4 4-6-6{% endif %}"/>
+          </svg>
+        </div>
+      </div>
+      <div class="text-2xl font-bold tracking-tight {% if kpis.net_profit_kzt >= 0 %}text-emerald-700{% else %}text-red-600{% endif %}">
+        {{ kpis.net_profit_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Чистый результат P&L (Выручка − Затраты)</div>
+    </div>
+
+  </div>
+
+  <!-- Liquidity & Debts Row -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- Total Liquid Balance -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Остатки в кассах и на счетах</span>
+        <a href="{% url 'finance:accounts' %}" class="text-xs text-emerald-800 font-semibold hover:underline">Все счета →</a>
+      </div>
+      <div class="text-2xl font-bold tracking-tight" style="color:#173B35;">
+        {{ kpis.total_account_balance_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Текущие доступные денежные средства</div>
+    </div>
+
+    <!-- Receivables (Дебиторка) -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Дебиторская задолженность</span>
+        <a href="{% url 'finance:receivables' %}" class="text-xs text-blue-800 font-semibold hover:underline">Подробнее →</a>
+      </div>
+      <div class="text-2xl font-bold tracking-tight text-blue-900">
+        {{ kpis.total_receivables_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Долги клиентов перед фабрикой</div>
+    </div>
+
+    <!-- Payables (Кредиторка) -->
+    <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Кредиторская задолженность</span>
+        <a href="{% url 'finance:payables' %}" class="text-xs text-amber-800 font-semibold hover:underline">Подробнее →</a>
+      </div>
+      <div class="text-2xl font-bold tracking-tight text-amber-900">
+        {{ kpis.total_payables_kzt|floatformat:0|intcomma }} ₸
+      </div>
+      <div class="text-[11px] text-gray-400 mt-1">Долги фабрики поставщикам материалов</div>
+    </div>
+
+  </div>
+
+  <!-- Accounts & Cash Desks Summary -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h3 class="text-base font-bold tracking-tight" style="color:#173B35;">Казначейство: Счета и кассы</h3>
+        <p class="text-xs text-gray-400">Актуальный баланс по расчётным счетам, Kaspi Pay и кассам</p>
+      </div>
+      <a href="{% url 'finance:account_transfer' %}"
+         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 shadow-sm">
+        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+        Внутренний перевод
+      </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% for acc in kpis.accounts %}
+      <div class="p-4 rounded-xl border border-gray-100 bg-gray-50/70 hover:bg-gray-50 transition-colors">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-medium text-gray-600 truncate font-semibold">{{ acc.name }}</span>
+          <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600">
+            {{ acc.type_label }}
+          </span>
+        </div>
+        <div class="text-xl font-bold tracking-tight mt-2" style="color:#173B35;">
+          {{ acc.balance_kzt|floatformat:2|intcomma }} ₸
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Factory Expense Structure -->
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-bold tracking-tight" style="color:#173B35;">Структура операционных расходов</h3>
+      <a href="{% url 'finance:expenses' %}" class="text-xs text-emerald-800 font-semibold hover:underline">Журнал расходов →</a>
+    </div>
+
+    {% if kpis.expenses_breakdown %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {% for cat in kpis.expenses_breakdown %}
+      <div class="p-4 rounded-xl border border-gray-100 bg-gray-50">
+        <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+          <span class="font-medium text-gray-800 truncate">{{ cat.label }}</span>
+          <span class="font-bold text-gray-700">{{ cat.percent }}%</span>
+        </div>
+        <div class="text-lg font-bold tracking-tight" style="color:#173B35;">
+          {{ cat.total|floatformat:0|intcomma }} ₸
+        </div>
+        <div class="w-full bg-gray-200 h-1.5 rounded-full mt-2.5 overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-300" style="background:#173B35; width:{{ cat.percent }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-6 text-gray-400 text-xs">
+      За выбранный период расходы не зарегистрированы
+    </div>
     {% endif %}
-  </form>
-</div>
-
-<!-- Expenses table -->
-<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-    <h3 class="text-sm font-semibold" style="color:#252D29;">Реестр расходных операций</h3>
-    <span class="text-xs text-gray-400">Найдено: {{ expenses|length }}</span>
   </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50 border-b border-gray-100">
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Дата</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Статья расхода</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Назначение платежа</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Получатель</th>
-          <th class="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Сумма (KZT)</th>
-          <th class="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Бухгалтер</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-50">
-        {% for exp in expenses %}
-        <tr class="hover:bg-gray-50">
-          <td class="px-5 py-3 text-xs font-medium text-gray-500">{{ exp.payment_date|date:"d.m.Y" }}</td>
-          <td class="px-5 py-3">
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-              {{ exp.get_category_display }}
-            </span>
-          </td>
-          <td class="px-5 py-3 text-xs font-medium" style="color:#252D29;">{{ exp.description }}</td>
-          <td class="px-5 py-3 text-xs text-gray-500">{{ exp.payee|default:"—" }}</td>
-          <td class="px-5 py-3 text-right text-xs font-bold" style="color:#173B35;">
-            {{ exp.amount_kzt|floatformat:0|intcomma }} ₸
-          </td>
-          <td class="px-5 py-3 text-xs text-gray-500">{{ exp.recorded_by.get_full_name|default:exp.recorded_by.username }}</td>
-        </tr>
+
+  <!-- Recent Operations (Customer Payments, Supplier Payments, Expenses) -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Recent Customer Payments -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-700">Оплаты клиентов</h4>
+        <a href="{% url 'finance:customer_payments' %}" class="text-[11px] text-emerald-800 font-semibold hover:underline">Все →</a>
+      </div>
+      <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+        {% for p in recent_customer_payments %}
+        <div class="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-gray-900 truncate">
+              {{ p.customer.name|default:"Клиент" }}
+            </div>
+            <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
+              <span>{{ p.payment_number }}</span>
+              <span>•</span>
+              <span>{{ p.payment_date|date:"d.m.Y" }}</span>
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div class="text-xs font-bold text-emerald-800">
+              +{{ p.amount_kzt|floatformat:0|intcomma }} ₸
+            </div>
+            <a href="{% url 'finance:customer_payment_pdf' p.pk %}" target="_blank"
+               class="text-[10px] text-gray-400 hover:text-gray-600 underline">Чек PDF</a>
+          </div>
+        </div>
         {% empty %}
-        <tr>
-          <td colspan="6" class="px-5 py-10 text-center text-gray-400 text-sm">
-            Записи расходов не найдены
-          </td>
-        </tr>
+        <div class="p-6 text-center text-xs text-gray-400">Нет оплат</div>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+      </div>
+    </div>
 
+    <!-- Recent Supplier Payments -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-700">Оплаты поставщикам</h4>
+        <a href="{% url 'finance:supplier_payments' %}" class="text-[11px] text-emerald-800 font-semibold hover:underline">Все →</a>
+      </div>
+      <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+        {% for p in recent_supplier_payments %}
+        <div class="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-gray-900 truncate">
+              {{ p.supplier.name|default:"Поставщик" }}
+            </div>
+            <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
+              <span>{{ p.payment_number }}</span>
+              <span>•</span>
+              <span>{{ p.payment_date|date:"d.m.Y" }}</span>
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div class="text-xs font-bold text-amber-900">
+              -{{ p.amount_kzt|floatformat:0|intcomma }} ₸
+            </div>
+            <a href="{% url 'finance:supplier_payment_pdf' p.pk %}" target="_blank"
+               class="text-[10px] text-gray-400 hover:text-gray-600 underline">Ордер PDF</a>
+          </div>
+        </div>
+        {% empty %}
+        <div class="p-6 text-center text-xs text-gray-400">Нет выплат</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Recent Expenses -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-700">Операционные расходы</h4>
+        <a href="{% url 'finance:expenses' %}" class="text-[11px] text-emerald-800 font-semibold hover:underline">Все →</a>
+      </div>
+      <div class="flex-1 overflow-y-auto divide-y divide-gray-50">
+        {% for exp in recent_expenses %}
+        <div class="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-gray-900 truncate">
+              {{ exp.description|default:exp.get_category_display }}
+            </div>
+            <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
+              <span>{{ exp.get_category_display }}</span>
+              <span>•</span>
+              <span>{{ exp.payment_date|date:"d.m.Y" }}</span>
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div class="text-xs font-bold text-gray-800">
+              -{{ exp.amount_kzt|floatformat:0|intcomma }} ₸
+            </div>
+            <span class="text-[10px] text-gray-400">{{ exp.payee|default:"—" }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="p-6 text-center text-xs text-gray-400">Нет расходов</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+</div>
 {% endblock %}
