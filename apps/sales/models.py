@@ -116,6 +116,54 @@ class SalesOrder(models.Model):
             return False
         return all(it.shipped_quantity >= it.quantity for it in items)
 
+    @property
+    def paid_amount_kzt(self) -> Decimal:
+        return sum((p.amount_kzt for p in self.payments.filter(status='COMPLETED')), Decimal('0.00'))
+
+    @property
+    def remaining_debt_kzt(self) -> Decimal:
+        rem = self.total_amount_kzt - self.paid_amount_kzt
+        return max(Decimal('0.00'), rem)
+
+    @property
+    def payment_status(self) -> str:
+        paid = self.paid_amount_kzt
+        total = self.total_amount_kzt
+        if paid <= Decimal('0.00'):
+            return 'UNPAID'
+        elif paid >= total:
+            return 'PAID'
+        return 'PARTIALLY_PAID'
+
+    @property
+    def payment_status_display(self) -> str:
+        mapping = {
+            'UNPAID': 'Не оплачено',
+            'PARTIALLY_PAID': 'Частично оплачено',
+            'PAID': 'Оплачено полностью',
+        }
+        return mapping.get(self.payment_status, '—')
+
+    @property
+    def total_cost_kzt(self) -> Decimal:
+        """Суммарная плановая себестоимость готовой продукции в заказе."""
+        cost = Decimal('0.00')
+        for it in self.items.select_related('product').all():
+            cost += Decimal(str(it.quantity)) * it.product.production_cost_kzt
+        return cost
+
+    @property
+    def gross_margin_kzt(self) -> Decimal:
+        """Валовая прибыль по заказу."""
+        return self.total_amount_kzt - self.total_cost_kzt
+
+    @property
+    def profitability_percent(self) -> float:
+        """Рентабельность заказа в %."""
+        if self.total_amount_kzt > Decimal('0.00'):
+            return round(float(self.gross_margin_kzt / self.total_amount_kzt) * 100, 1)
+        return 0.0
+
     def recalculate_totals(self):
         subtotal = Decimal('0.00')
         for item in self.items.all():
