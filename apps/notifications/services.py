@@ -34,8 +34,8 @@ def notify_role(role: str, notification_type: str, title: str, message: str, lin
 
 
 def notify_all_managers(notification_type: str, title: str, message: str, link: str = ''):
-    """Отправляет уведомление ключевым руководителям (Админ, Нач. производства, Снабжение/Склад, Менеджер)."""
-    roles = [UserRole.ADMIN, UserRole.PRODUCTION_HEAD, UserRole.WAREHOUSE_MANAGER, UserRole.SALES_MANAGER]
+    """Отправляет уведомление ключевым руководителям (Владелец, Админ, Нач. производства, Снабжение/Склад, Менеджер)."""
+    roles = [UserRole.OWNER, UserRole.ADMIN, UserRole.PRODUCTION_MANAGER, UserRole.WAREHOUSE_MANAGER, UserRole.SALES_MANAGER]
     users = User.objects.filter(role__in=roles, is_active=True).distinct()
     for u in users:
         Notification.objects.create(
@@ -102,7 +102,7 @@ def notify_waiting_production(sales_order, deficit_summary=''):
         f'{deficit_summary} Необходимо сформировать производственный заказ.'
     )
     notify_role(
-        role=UserRole.PRODUCTION_HEAD,
+        role=UserRole.PRODUCTION_MANAGER,
         notification_type=NotificationType.PRODUCTION,
         title=title,
         message=message,
@@ -133,7 +133,7 @@ def notify_qc_failed(production_order, failed_reasons: str = ''):
         f'Замечания: {failed_reasons or "Несоответствие критериям качества"}. Требуется доработка.'
     )
     notify_role(
-        role=UserRole.PRODUCTION_HEAD,
+        role=UserRole.PRODUCTION_MANAGER,
         notification_type=NotificationType.PRODUCTION,
         title=title,
         message=message,

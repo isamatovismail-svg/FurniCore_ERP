@@ -1,0 +1,89 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'products:index' %}" class="hover:text-primary-700">Каталог изделий</a> / {{ page_title }}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-gray-800">{{ page_title }}</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Внесение мебельной модели в ассортиментный каталог</p>
+    </div>
+    <a href="{% url 'products:index' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      ← К списку изделий
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-6">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Артикул / SKU *</label>
+          <input type="text" name="sku" value="{{ product.sku|default:'' }}" required placeholder="Например: PRD-TBL-LOFT"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Штрихкод / EAN</label>
+          <input type="text" name="barcode" value="{{ product.barcode|default:'' }}" placeholder="4871234567890"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-mono">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Наименование мебели *</label>
+        <input type="text" name="name" value="{{ product.name|default:'' }}" required placeholder="Например: Обеденный стол Loft Oak 1800x900"
+               class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Категория мебели</label>
+          <select name="category" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none focus:border-primary-600">
+            {% for code, label in categories %}
+            <option value="{{ code }}" {% if product and product.category == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Габариты (Д × Ш × В)</label>
+          <input type="text" name="dimensions" value="{{ product.dimensions|default:'' }}" placeholder="1800 × 900 × 750 мм"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Плановая себестоимость (₸)</label>
+          <input type="number" step="100" min="0" name="production_cost_kzt" value="{{ product.production_cost_kzt|default:'0.00' }}"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-semibold">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Розничная цена продажи (₸) *</label>
+          <input type="number" step="100" min="0" name="sale_price_kzt" value="{{ product.sale_price_kzt|default:'0.00' }}" required
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-bold text-gray-900">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Техническое описание и комплектация</label>
+        <textarea name="description" rows="3" placeholder="Массив дуба, металлическое подстолье с порошковой покраской, защитное масло-воск..."
+                  class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">{{ product.description|default:'' }}</textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+        <a href="{% url 'products:index' %}" class="px-4 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+          Отмена
+        </a>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity" style="background:#173B35;">
+          {% if product %}Сохранить изменения{% else %}Создать карточку изделия{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

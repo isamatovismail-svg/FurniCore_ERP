@@ -14,8 +14,9 @@ def can_manage_materials(user) -> bool:
     if not user.is_authenticated:
         return False
     return user.role in [
+        UserRole.OWNER,
         UserRole.ADMIN,
-        UserRole.PRODUCTION_HEAD,
+        UserRole.PRODUCTION_MANAGER,
         UserRole.WAREHOUSE_MANAGER,
     ] or user.is_superuser
 

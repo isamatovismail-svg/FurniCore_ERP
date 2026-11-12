@@ -30,6 +30,17 @@ from apps.production.models import (
 from apps.quality.models import QualityCheck, QCResult
 
 
+def generate_production_order_number() -> str:
+    """Генерация уникального номера производственного заказа."""
+    year = timezone.now().year
+    suffix = uuid.uuid4().hex[:4].upper()
+    count = ProductionOrder.objects.filter(order_number__startswith=f'PO-{year}').count() + 1
+    return f'PO-{year}-{count:03d}-{suffix}'
+
+
+generate_order_number = generate_production_order_number
+
+
 # Стандартные технологические маршруты по умолчанию для мебельных категорий
 DEFAULT_CATEGORY_ROUTES = {
     'WARDROBE': [

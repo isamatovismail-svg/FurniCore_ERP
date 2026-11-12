@@ -80,8 +80,8 @@ def create_purchase_order(
 
     AuditLog.objects.create(
         user=created_by,
-        action=AuditLog.Action.CREATE,
-        entity_name='PurchaseOrder',
+        action='CREATE_PURCHASE_ORDER',
+        entity_type='PurchaseOrder',
         entity_id=str(po.id),
         details={
             'order_number': po.order_number,
@@ -108,8 +108,8 @@ def confirm_purchase_order(purchase_order: PurchaseOrder, user=None) -> Purchase
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.UPDATE,
-        entity_name='PurchaseOrder',
+        action='CONFIRM_PURCHASE_ORDER',
+        entity_type='PurchaseOrder',
         entity_id=str(po.id),
         details={'event': 'confirmed_and_sent', 'order_number': po.order_number},
     )
@@ -217,8 +217,8 @@ def receive_purchase_order_items(
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.CREATE,
-        entity_name='WarehouseDocument',
+        action='POST_RECEIPT',
+        entity_type='WarehouseDocument',
         entity_id=str(receipt_doc.id),
         details={
             'doc_number': receipt_doc.doc_number,
@@ -246,8 +246,8 @@ def cancel_purchase_order(purchase_order: PurchaseOrder, user=None) -> PurchaseO
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.CANCEL,
-        entity_name='PurchaseOrder',
+        action='CANCEL_PURCHASE_ORDER',
+        entity_type='PurchaseOrder',
         entity_id=str(po.id),
         details={'event': 'cancelled', 'order_number': po.order_number},
     )

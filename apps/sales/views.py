@@ -23,9 +23,10 @@ def can_manage_sales(user) -> bool:
     if not user.is_authenticated:
         return False
     return user.role in [
+        UserRole.OWNER,
         UserRole.ADMIN,
         UserRole.SALES_MANAGER,
-        UserRole.PRODUCTION_HEAD,
+        UserRole.PRODUCTION_MANAGER,
         UserRole.ACCOUNTANT,
     ] or user.is_superuser
 

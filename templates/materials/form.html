@@ -1,0 +1,104 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'materials:index' %}" class="hover:text-primary-700">Материалы</a> / {{ page_title }}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-gray-800">{{ page_title }}</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Карточка сырья, фурнитуры и комплектующих для склада WH-1</p>
+    </div>
+    <a href="{% url 'materials:index' %}" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs">
+      ← К списку материалов
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-6">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Артикул / SKU *</label>
+          <input type="text" name="sku" value="{{ material.sku|default:'' }}" required placeholder="Например: MAT-LDS-EGG"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Штрихкод / EAN</label>
+          <input type="text" name="barcode" value="{{ material.barcode|default:'' }}" placeholder="4870001234567"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-mono">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Наименование материала *</label>
+        <input type="text" name="name" value="{{ material.name|default:'' }}" required placeholder="Например: ЛДСП Egger Дуб Галифакс Натуральный 18мм"
+               class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Категория</label>
+          <select name="category" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none focus:border-primary-600">
+            {% for code, label in categories %}
+            <option value="{{ code }}" {% if material and material.category == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Единица измерения</label>
+          <input type="text" name="unit" value="{{ material.unit|default:'лист' }}" placeholder="лист, м2, пог.м, шт, кг"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Учётная цена закупки (₸)</label>
+          <input type="number" step="0.01" min="0" name="purchase_cost_kzt" value="{{ material.purchase_cost_kzt|default:'0.00' }}"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-semibold">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Минимальный остаток</label>
+          <input type="number" step="0.001" min="0" name="min_stock_level" value="{{ material.min_stock_level|default:'5.000' }}"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Ячейка на WH-1</label>
+          <input type="text" name="location" value="{{ material.location|default:'A-01-1' }}" placeholder="A-01-1"
+                 class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none font-mono">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Основной поставщик</label>
+        <select name="supplier" class="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none focus:border-primary-600">
+          <option value="">Не назначен</option>
+          {% for sup in suppliers %}
+          <option value="{{ sup.id }}" {% if material and material.supplier_id == sup.id %}selected{% endif %}>{{ sup.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-gray-700 mb-1">Техническое описание / Примечания</label>
+        <textarea name="description" rows="2" placeholder="Характеристики, текстура, сертификаты..."
+                  class="w-full px-3.5 py-2 text-xs rounded-lg border border-gray-200 focus:border-primary-600 focus:ring-1 focus:ring-primary-600 outline-none">{{ material.description|default:'' }}</textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+        <a href="{% url 'materials:index' %}" class="px-4 py-2 rounded-lg text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+          Отмена
+        </a>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white shadow-2xs hover:opacity-90 transition-opacity" style="background:#173B35;">
+          {% if material %}Сохранить изменения{% else %}Добавить в номенклатуру{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

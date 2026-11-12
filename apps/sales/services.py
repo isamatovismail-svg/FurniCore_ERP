@@ -100,8 +100,8 @@ def create_sales_order(
 
     AuditLog.objects.create(
         user=created_by,
-        action=AuditLog.Action.CREATE,
-        entity_name='SalesOrder',
+        action='CREATE_SALES_ORDER',
+        entity_type='SalesOrder',
         entity_id=str(order.id),
         details={
             'order_number': order.order_number,
@@ -250,8 +250,8 @@ def confirm_and_reserve_sales_order(sales_order: SalesOrder, user=None) -> tuple
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.UPDATE,
-        entity_name='SalesOrder',
+        action='RESERVE_SALES_ORDER',
+        entity_type='SalesOrder',
         entity_id=str(so.id),
         details={
             'event': 'confirmed_and_reserved',
@@ -324,8 +324,8 @@ def create_production_orders_for_sales_order(
 
         AuditLog.objects.create(
             user=user,
-            action=AuditLog.Action.CREATE,
-            entity_name='ProductionOrder',
+            action='CREATE_PRODUCTION_ORDERS',
+            entity_type='SalesOrder',
             entity_id=str(so.id),
             details={
                 'event': 'production_orders_created_from_sales',
@@ -445,8 +445,8 @@ def ship_sales_order(
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.CREATE,
-        entity_name='WarehouseDocument',
+        action='SHIP_SALES_ORDER',
+        entity_type='WarehouseDocument',
         entity_id=str(shipment_doc.id),
         details={
             'doc_number': shipment_doc.doc_number,
@@ -514,8 +514,8 @@ def cancel_sales_order(sales_order: SalesOrder, user=None) -> SalesOrder:
 
     AuditLog.objects.create(
         user=user,
-        action=AuditLog.Action.CANCEL,
-        entity_name='SalesOrder',
+        action='CANCEL_SALES_ORDER',
+        entity_type='SalesOrder',
         entity_id=str(so.id),
         details={'event': 'order_cancelled', 'order_number': so.order_number},
     )
