@@ -162,7 +162,7 @@
       </div>
       <div>
         <p class="text-[11px] font-medium text-gray-400">Создал заказ</p>
-        <p class="text-xs font-semibold text-gray-600">{{ order.created_by.get_full_name_ru|default:order.created_by.username }}</p>
+        <p class="text-xs font-semibold text-gray-600">{% if order.created_by %}{{ order.created_by.get_full_name_ru|default:order.created_by.username }}{% else %}—{% endif %}</p>
       </div>
     </div>
 
@@ -297,7 +297,7 @@
               {% for qc in quality_checks %}
               <tr>
                 <td class="font-mono">{{ qc.checked_at|date:"d.m.y H:i" }}</td>
-                <td>{{ qc.checked_by.get_full_name_ru|default:qc.checked_by.username }}</td>
+                <td>{% if qc.checked_by %}{{ qc.checked_by.get_full_name_ru|default:qc.checked_by.username }}{% else %}—{% endif %}</td>
                 <td class="text-center font-semibold">{{ qc.quantity_checked|floatformat:0 }}</td>
                 <td class="text-center font-bold text-emerald-700">{{ qc.quantity_accepted|floatformat:0 }}</td>
                 <td class="text-center font-bold text-rose-600">{{ qc.quantity_defective|floatformat:0 }}</td>

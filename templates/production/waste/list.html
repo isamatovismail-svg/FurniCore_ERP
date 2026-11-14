@@ -72,7 +72,7 @@
             <td class="font-mono font-bold text-rose-600">{{ w.cost_kzt|intcomma }} ₸</td>
             <td class="text-gray-600 max-w-xs truncate">{{ w.reason|default:"—" }}</td>
             <td class="text-gray-600 max-w-xs truncate">{{ w.decision|default:"—" }}</td>
-            <td class="text-gray-500">{{ w.reported_by.get_full_name_ru|default:w.reported_by.username }}</td>
+            <td class="text-gray-500">{% if w.reported_by %}{{ w.reported_by.get_full_name_ru|default:w.reported_by.username }}{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>

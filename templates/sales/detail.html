@@ -120,7 +120,7 @@
       <div class="text-sm font-bold text-gray-800 mt-1">Склад отгрузки: WH-2</div>
       <div class="text-xs text-gray-500 mt-1">Дата заказа: {{ order.created_at|date:"d.m.Y" }}</div>
       <div class="text-xs text-gray-500">Срок готовности: {{ order.planned_delivery_date|date:"d.m.Y"|default:"По согласованию" }}</div>
-      <div class="text-xs text-gray-500">Менеджер: {{ order.created_by.get_full_name|default:order.created_by.username|default:"Отдел продаж" }}</div>
+      <div class="text-xs text-gray-500">Менеджер: {% if order.created_by %}{{ order.created_by.get_full_name|default:order.created_by.username }}{% else %}Отдел продаж{% endif %}</div>
     </div>
     <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4">
       <div class="flex items-center justify-between">

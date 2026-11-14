@@ -379,7 +379,7 @@
           </td>
           <td class="px-5 py-3 text-right font-bold">{{ mv.quantity|floatformat:1 }} {{ mv.unit }}</td>
           <td class="px-5 py-3 text-right font-medium text-gray-700">{{ mv.total_cost_kzt|floatformat:0|intcomma }} ₸</td>
-          <td class="px-5 py-3 text-gray-500">{{ mv.performed_by.get_full_name|default:mv.performed_by.username }}</td>
+          <td class="px-5 py-3 text-gray-500">{% if mv.performed_by %}{{ mv.performed_by.get_full_name|default:mv.performed_by.username }}{% else %}Система{% endif %}</td>
           <td class="px-5 py-3 text-gray-400 font-mono text-[11px]">{{ mv.created_at|date:"d.m.Y H:i" }}</td>
         </tr>
         {% empty %}
