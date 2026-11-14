@@ -67,12 +67,13 @@ def register_customer_payment(
     payment_method: str = PaymentMethod.BANK_TRANSFER,
     user: User = None,
     created_by: User = None,
+    recorded_by: User = None,
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
 ) -> CustomerPayment:
     """Регистрация поступившего платежа от клиента по заказу покупателя."""
-    user = user or created_by
+    user = user or created_by or recorded_by
     amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма платежа должна быть строго больше нуля.')
@@ -194,12 +195,13 @@ def register_supplier_payment(
     payment_method: str = PaymentMethod.BANK_TRANSFER,
     user: User = None,
     created_by: User = None,
+    recorded_by: User = None,
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
 ) -> SupplierPayment:
     """Регистрация выплаты поставщику по заказу на закупку или общему договору."""
-    user = user or created_by
+    user = user or created_by or recorded_by
     amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма выплаты должна быть строго больше нуля.')
@@ -307,11 +309,14 @@ def transfer_between_accounts(
     amount_kzt: Decimal,
     user: User = None,
     created_by: User = None,
+    recorded_by: User = None,
     transfer_date=None,
     notes: str = '',
+    description: str = '',
 ) -> AccountTransfer:
     """Внутренний перевод между счетами и кассами (не влияет на P&L)."""
-    user = user or created_by
+    user = user or created_by or recorded_by
+    notes = notes or description
     if from_account.pk == to_account.pk:
         raise ValidationError('Нельзя выполнить перевод на один и тот же счёт.')
 
@@ -636,8 +641,11 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
     }
 
 
-def calculate_production_order_actual_cost(order: ProductionOrder) -> dict:
+def calculate_production_order_actual_cost(order) -> dict:
     """Детальный расчёт план-факт себестоимости производственного заказа на основе складских списаний."""
+    if not isinstance(order, ProductionOrder):
+        order = ProductionOrder.objects.get(pk=order)
+
     # 1. Фактические материалы со склада WH-1
     actual_materials_cost = Decimal('0.00')
     actual_materials_items = []
@@ -690,6 +698,7 @@ def calculate_production_order_actual_cost(order: ProductionOrder) -> dict:
         'planned_overhead_cost_kzt': order.overhead_cost_kzt,
         'actual_materials': actual_materials_cost,
         'actual_materials_cost_kzt': actual_materials_cost,
+        'actual_material_cost_kzt': actual_materials_cost,
         'actual_labor': actual_labor_cost,
         'actual_labor_cost_kzt': actual_labor_cost,
         'actual_overhead': overhead_cost,

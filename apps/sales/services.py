@@ -173,7 +173,7 @@ def confirm_and_reserve_sales_order(sales_order: SalesOrder, user=None) -> tuple
     Если есть дефицит: статус становится WAITING_PRODUCTION, резервируется доступная часть.
     """
     so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
-    if so.status not in [OrderStatus.DRAFT, OrderStatus.NEW, OrderStatus.WAITING_PRODUCTION]:
+    if so.status not in [OrderStatus.DRAFT, OrderStatus.NEW, OrderStatus.WAITING_PRODUCTION, OrderStatus.IN_PRODUCTION]:
         raise ValidationError(f'Невозможно зарезервировать заказ в статусе "{so.get_status_display()}".')
 
     wh2 = Warehouse.objects.filter(warehouse_type=WarehouseType.FINISHED_PRODUCTS).first()
