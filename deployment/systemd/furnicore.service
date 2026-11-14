@@ -1,0 +1,28 @@
+[Unit]
+Description=FurniCore ERP Gunicorn Application Server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=furnicore
+Group=furnicore
+WorkingDirectory=/var/www/furnicore
+Environment="PATH=/var/www/furnicore/.venv/bin:/usr/local/bin:/usr/bin"
+EnvironmentFile=/var/www/furnicore/.env
+ExecStart=/var/www/furnicore/.venv/bin/gunicorn \
+    --config /var/www/furnicore/config/gunicorn_conf.py \
+    config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=15
+Restart=always
+RestartSec=3
+
+# Sandboxing & Security
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

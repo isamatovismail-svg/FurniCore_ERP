@@ -33,9 +33,15 @@ env/
 .env.local
 *.local.py
 
-# Databases
+# Databases & Backups
 *.sqlite3
 *.db
+backups/
+*.dump
+
+# Logs
+logs/
+*.log
 
 # Pytest / Coverage
 .pytest_cache/
