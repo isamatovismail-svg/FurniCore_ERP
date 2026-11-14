@@ -60,36 +60,44 @@ def ensure_default_accounts() -> list[FinancialAccount]:
 
 @transaction.atomic
 def register_customer_payment(
-    sales_order: SalesOrder,
-    account: FinancialAccount,
     amount_kzt: Decimal,
-    payment_method: str,
-    user: User,
+    account: FinancialAccount,
+    sales_order: SalesOrder = None,
+    customer: Customer = None,
+    payment_method: str = PaymentMethod.BANK_TRANSFER,
+    user: User = None,
+    created_by: User = None,
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
 ) -> CustomerPayment:
     """Регистрация поступившего платежа от клиента по заказу покупателя."""
+    user = user or created_by
     amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма платежа должна быть строго больше нуля.')
 
-    # Блокировка строк для предотвращения конкурентных гонок
-    so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
     acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
-
     if not acc.is_active:
         raise ValidationError(f'Денежный счёт «{acc.name}» не активен.')
 
-    remaining_debt = so.remaining_debt_kzt
-    if amount > remaining_debt:
-        raise ValidationError(
-            f'Сумма платежа ({amount:,.2f} ₸) превышает остаток долга по заказу {so.order_number} ({remaining_debt:,.2f} ₸).'
-        )
+    so = None
+    if sales_order:
+        so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
+        customer = customer or so.customer
+        remaining_debt = so.remaining_debt_kzt
+        if amount > remaining_debt:
+            raise ValidationError(
+                f'Сумма платежа ({amount:,.2f} ₸) превышает остаток долга по заказу {so.order_number} ({remaining_debt:,.2f} ₸).'
+            )
+
+    if not customer and not so:
+        raise ValidationError('Необходимо указать клиента или заказ покупателя.')
 
     # Защита от дублирования идентичного платежа в течение 10 секунд
     recent_dup = CustomerPayment.objects.filter(
         sales_order=so,
+        customer=customer,
         account=acc,
         amount_kzt=amount,
         status=PaymentStatus.COMPLETED,
@@ -105,7 +113,7 @@ def register_customer_payment(
     payment = CustomerPayment.objects.create(
         payment_number=payment_num,
         sales_order=so,
-        customer=so.customer,
+        customer=customer,
         account=acc,
         amount_kzt=amount,
         payment_date=p_date,
@@ -127,7 +135,8 @@ def register_customer_payment(
         entity_id=str(payment.id),
         details={
             'payment_number': payment.payment_number,
-            'sales_order': so.order_number,
+            'sales_order': so.order_number if so else None,
+            'customer': customer.name if customer else None,
             'amount': float(amount),
             'account': acc.name,
             'new_balance': float(acc.current_balance_kzt),
@@ -178,17 +187,19 @@ def storno_customer_payment(payment: CustomerPayment, user: User, reason: str = 
 
 @transaction.atomic
 def register_supplier_payment(
-    supplier: Supplier,
-    account: FinancialAccount,
     amount_kzt: Decimal,
-    payment_method: str,
-    user: User,
+    account: FinancialAccount,
+    supplier: Supplier = None,
     purchase_order: PurchaseOrder = None,
+    payment_method: str = PaymentMethod.BANK_TRANSFER,
+    user: User = None,
+    created_by: User = None,
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
 ) -> SupplierPayment:
     """Регистрация выплаты поставщику по заказу на закупку или общему договору."""
+    user = user or created_by
     amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма выплаты должна быть строго больше нуля.')
@@ -206,11 +217,15 @@ def register_supplier_payment(
     po = None
     if purchase_order:
         po = PurchaseOrder.objects.select_for_update().get(pk=purchase_order.pk)
+        supplier = supplier or po.supplier
         rem_debt = po.remaining_debt_kzt
         if amount > rem_debt:
             raise ValidationError(
                 f'Сумма выплаты ({amount:,.2f} ₸) превышает остаток задолженности по заказу {po.order_number} ({rem_debt:,.2f} ₸).'
             )
+
+    if not supplier and not po:
+        raise ValidationError('Необходимо указать поставщика или заказ закупки.')
 
     payment_num = generate_payment_number('PAY-S')
     p_date = payment_date or timezone.localdate()
@@ -240,7 +255,7 @@ def register_supplier_payment(
         entity_id=str(payment.id),
         details={
             'payment_number': payment.payment_number,
-            'supplier': supplier.name,
+            'supplier': supplier.name if supplier else None,
             'purchase_order': po.order_number if po else None,
             'amount': float(amount),
             'account': acc.name,
@@ -290,11 +305,13 @@ def transfer_between_accounts(
     from_account: FinancialAccount,
     to_account: FinancialAccount,
     amount_kzt: Decimal,
-    user: User,
+    user: User = None,
+    created_by: User = None,
     transfer_date=None,
     notes: str = '',
 ) -> AccountTransfer:
     """Внутренний перевод между счетами и кассами (не влияет на P&L)."""
+    user = user or created_by
     if from_account.pk == to_account.pk:
         raise ValidationError('Нельзя выполнить перевод на один и тот же счёт.')
 
@@ -359,13 +376,15 @@ def record_expense(
     category: str,
     amount_kzt: Decimal,
     description: str,
-    user: User,
+    user: User = None,
+    recorded_by: User = None,
     account: FinancialAccount = None,
     payee: str = '',
     payment_method: str = PaymentMethod.BANK_TRANSFER,
     payment_date=None,
 ) -> Expense:
     """Регистрация операционного расхода предприятия с опциональным списанием с кассы/счёта."""
+    user = user or recorded_by
     amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма расхода должна быть строго положительной.')
@@ -577,28 +596,43 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
                 'category': cat.value,
                 'label': cat.label,
                 'amount': tot,
+                'total': tot,
                 'percent': pct,
             })
     expense_structure.sort(key=lambda x: x['amount'], reverse=True)
 
     return {
         'total_accrual_revenue': total_accrual_revenue,
+        'accrual_revenue_kzt': total_accrual_revenue,
         'other_income': other_income,
+        'other_income_kzt': other_income,
         'total_revenue_all': total_revenue_all,
+        'total_revenue_kzt': total_revenue_all,
         'general_expenses': general_expenses,
+        'cash_expenses_kzt': general_expenses,
+        'purchases_total': supplier_cash_paid,
+        'purchases_total_kzt': supplier_cash_paid,
         'net_profit': net_profit,
+        'net_profit_kzt': net_profit,
         'cash_inflow': cash_inflow,
+        'cash_inflow_kzt': cash_inflow,
         'cash_outflow': cash_outflow,
+        'cash_outflow_kzt': cash_outflow,
         'net_cash_flow': net_cash_flow,
+        'net_cash_flow_kzt': net_cash_flow,
         'total_cash_and_bank': total_cash_and_bank,
+        'total_account_balance_kzt': total_cash_and_bank,
         'accounts': accounts,
         'receivables_total': receivables_total,
+        'total_receivables_kzt': receivables_total,
         'receivables_count': len(receivables_list),
         'receivables_list': receivables_list[:10],
         'payables_total': payables_total,
+        'total_payables_kzt': payables_total,
         'payables_count': len(payables_list),
         'payables_list': payables_list[:10],
         'expense_structure': expense_structure,
+        'expenses_breakdown': expense_structure,
     }
 
 

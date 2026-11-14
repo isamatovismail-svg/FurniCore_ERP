@@ -353,7 +353,7 @@ def test_financial_account_balances(finance_setup):
     )
     # Outflow -20 000
     record_expense(
-        category=ExpenseCategory.OFFICE,
+        category=ExpenseCategory.OTHER,
         amount_kzt=Decimal('20000.00'),
         description='Канцтовары',
         account=setup['cash_acc'],
@@ -372,8 +372,8 @@ def test_material_cost_calculation(finance_setup):
 
     # Create Warehouse Document for PRODUCTION_ISSUE
     doc = WarehouseDocument.objects.create(
-        document_number='DOC-ISSUE-TEST-001',
-        document_type=WarehouseDocumentType.PRODUCTION_ISSUE,
+        doc_number='DOC-ISSUE-TEST-001',
+        doc_type=WarehouseDocumentType.PRODUCTION_ISSUE,
         warehouse=setup['wh1'],
         status=DocumentStatus.POSTED,
         production_order=order,
@@ -405,8 +405,8 @@ def test_actual_production_order_cost(finance_setup):
     # Labor: 5 * 5000 = 25 000, Overhead: 5 * 2000 = 10 000 -> Total labor & overhead = 35 000
     # Actual materials issue: 120 000
     doc = WarehouseDocument.objects.create(
-        document_number='DOC-ISSUE-TEST-002',
-        document_type=WarehouseDocumentType.PRODUCTION_ISSUE,
+        doc_number='DOC-ISSUE-TEST-002',
+        doc_type=WarehouseDocumentType.PRODUCTION_ISSUE,
         warehouse=setup['wh1'],
         status=DocumentStatus.POSTED,
         production_order=order,

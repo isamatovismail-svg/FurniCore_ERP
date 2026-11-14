@@ -104,7 +104,7 @@ def generate_customer_payment_pdf(payment) -> bytes:
         [Paragraph("Финансовый счёт / Касса:", cell_label_style), Paragraph(account_name, cell_val_style)],
         [Paragraph("Способ оплаты:", cell_label_style), Paragraph(payment.get_payment_method_display(), cell_val_style)],
         [Paragraph("Статус платежа:", cell_label_style), Paragraph(status_label, cell_val_style)],
-        [Paragraph("Кассир / Оператор:", cell_label_style), Paragraph(payment.created_by.get_full_name() if payment.created_by else 'Система', cell_val_style)],
+        [Paragraph("Кассир / Оператор:", cell_label_style), Paragraph((payment.created_by.get_full_name() or payment.created_by.username) if payment.created_by else 'Система', cell_val_style)],
         [Paragraph("Назначение / Комментарий:", cell_label_style), Paragraph(payment.notes or 'Оплата по заказу мебели', cell_val_style)],
     ]
 
@@ -237,7 +237,7 @@ def generate_supplier_payment_pdf(payment) -> bytes:
         [Paragraph("Счёт списания:", cell_label_style), Paragraph(account_name, cell_val_style)],
         [Paragraph("Способ оплаты:", cell_label_style), Paragraph(payment.get_payment_method_display(), cell_val_style)],
         [Paragraph("Статус платежа:", cell_label_style), Paragraph(payment.get_status_display(), cell_val_style)],
-        [Paragraph("Ответственный бухгалтер:", cell_label_style), Paragraph(payment.created_by.get_full_name() if payment.created_by else 'Бухгалтерия', cell_val_style)],
+        [Paragraph("Ответственный бухгалтер:", cell_label_style), Paragraph((payment.created_by.get_full_name() or payment.created_by.username) if payment.created_by else 'Бухгалтерия', cell_val_style)],
         [Paragraph("Назначение платежа:", cell_label_style), Paragraph(payment.notes or 'Оплата поставщику за материалы и фурнитуру', cell_val_style)],
     ]
 
@@ -383,7 +383,10 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([])
         ws.append(["Остатки на счетах и в кассах:"])
         for acc in kpis['accounts']:
-            ws.append([acc['name'], float(acc['balance_kzt']), acc['type_label']])
+            name = acc.name if hasattr(acc, 'name') else acc.get('name', '—')
+            bal = float(acc.current_balance_kzt) if hasattr(acc, 'current_balance_kzt') else float(acc.get('balance_kzt', 0.0))
+            t_label = acc.type_label if hasattr(acc, 'type_label') else acc.get('type_label', '')
+            ws.append([name, bal, t_label])
 
     elif report_type == 'receivables':
         ws.title = "Дебиторка"

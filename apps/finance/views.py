@@ -36,8 +36,8 @@ from apps.finance.reports import (
     generate_supplier_payment_pdf,
     export_financial_excel,
 )
-from apps.sales.models import SalesOrder, Customer
-from apps.suppliers.models import PurchaseOrder, Supplier
+from apps.sales.models import SalesOrder, Customer, OrderStatus
+from apps.suppliers.models import PurchaseOrder, Supplier, PurchaseOrderStatus
 from apps.production.models import ProductionOrder
 
 

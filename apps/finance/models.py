@@ -53,6 +53,10 @@ class FinancialAccount(models.Model):
         verbose_name_plural = 'Денежные счета и кассы'
         ordering = ['name']
 
+    @property
+    def created_by(self):
+        return self.recorded_by
+
     def __str__(self):
         return f'{self.name} ({self.current_balance_kzt:,.2f} ₸)'
 
@@ -63,6 +67,10 @@ class FinancialAccount(models.Model):
     @balance_kzt.setter
     def balance_kzt(self, value):
         self.current_balance_kzt = value
+
+    @property
+    def type_label(self):
+        return self.get_account_type_display()
 
 
 class CustomerPayment(models.Model):
@@ -122,6 +130,10 @@ class CustomerPayment(models.Model):
         verbose_name = 'Платёж покупателя'
         verbose_name_plural = 'Платежи покупателей'
         ordering = ['-payment_date', '-created_at']
+
+    @property
+    def created_by(self):
+        return self.recorded_by
 
     def __str__(self):
         return f'{self.payment_number} — {self.amount_kzt:,.2f} ₸ ({self.customer.name})'
@@ -190,6 +202,10 @@ class SupplierPayment(models.Model):
         verbose_name_plural = 'Платежи поставщикам'
         ordering = ['-payment_date', '-created_at']
 
+    @property
+    def created_by(self):
+        return self.recorded_by
+
     def __str__(self):
         return f'{self.payment_number} — {self.amount_kzt:,.2f} ₸ ({self.supplier.name})'
 
@@ -239,6 +255,10 @@ class AccountTransfer(models.Model):
         verbose_name = 'Внутренний перевод'
         verbose_name_plural = 'Внутренние переводы'
         ordering = ['-transfer_date', '-created_at']
+
+    @property
+    def created_by(self):
+        return self.recorded_by
 
     def __str__(self):
         return f'{self.transfer_number}: {self.from_account.name} → {self.to_account.name} ({self.amount_kzt:,.2f} ₸)'
@@ -303,6 +323,10 @@ class Expense(models.Model):
         verbose_name_plural = 'Финансовые расходы'
         ordering = ['-payment_date', '-created_at']
 
+    @property
+    def created_by(self):
+        return self.recorded_by
+
     def __str__(self):
         return f'{self.get_category_display()}: {self.amount_kzt:,.2f} ₸ ({self.payment_date})'
 
@@ -356,6 +380,10 @@ class GeneralIncome(models.Model):
         verbose_name = 'Прочий доход'
         verbose_name_plural = 'Прочие доходы'
         ordering = ['-income_date', '-created_at']
+
+    @property
+    def created_by(self):
+        return self.recorded_by
 
     def __str__(self):
         return f'{self.get_category_display()}: {self.amount_kzt:,.2f} ₸ ({self.income_date})'
