@@ -559,6 +559,10 @@ def test_report_generation_pdf_and_excel(finance_setup):
     assert len(supp_pdf) > 1000
     assert supp_pdf.startswith(b'%PDF')
 
+    # DateField values are rendered as dates in both PDF headers.
+    assert b'00:00' not in pdf_bytes
+    assert b'00:00' not in supp_pdf
+
     # 3. Excel P&L export
     excel_pandl = export_financial_excel('pandl')
     assert len(excel_pandl) > 1000

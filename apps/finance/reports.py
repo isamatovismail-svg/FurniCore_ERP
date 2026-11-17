@@ -88,7 +88,7 @@ def generate_customer_payment_pdf(payment) -> bytes:
     elements.append(Paragraph("ТОО «FurniCore» — Мебельная фабрика", subtitle_style))
     elements.append(Spacer(1, 4))
     elements.append(Paragraph(f"КВИТАНЦИЯ ОБ ОПЛАТЕ № {payment.payment_number}", title_style))
-    elements.append(Paragraph(f"Дата операции: {payment.payment_date.strftime('%d.%m.%Y %H:%M')}", subtitle_style))
+    elements.append(Paragraph(f"Дата операции: {payment.payment_date.strftime('%d.%m.%Y')}", subtitle_style))
     elements.append(Spacer(1, 16))
 
     # Payment info table
@@ -224,7 +224,7 @@ def generate_supplier_payment_pdf(payment) -> bytes:
     elements.append(Paragraph("ТОО «FurniCore» — Мебельная фабрика", subtitle_style))
     elements.append(Spacer(1, 4))
     elements.append(Paragraph(f"РАСХОДНЫЙ ОРДЕР / ПЛАТЁЖ ПОСТАВЩИКУ № {payment.payment_number}", title_style))
-    elements.append(Paragraph(f"Дата операции: {payment.payment_date.strftime('%d.%m.%Y %H:%M')}", subtitle_style))
+    elements.append(Paragraph(f"Дата операции: {payment.payment_date.strftime('%d.%m.%Y')}", subtitle_style))
     elements.append(Spacer(1, 16))
 
     supplier_name = payment.supplier.name if payment.supplier else (payment.purchase_order.supplier.name if payment.purchase_order else '—')

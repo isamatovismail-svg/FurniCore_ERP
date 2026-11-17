@@ -113,7 +113,7 @@
               {{ tr.notes|default:"Перемещение средств" }}
             </td>
             <td class="px-5 py-3.5 text-gray-500">
-              {% if tr.created_by %}{{ tr.created_by.get_full_name|default:tr.created_by.username }}{% else %}—{% endif %}
+              {% if tr.recorded_by %}{{ tr.recorded_by.get_full_name|default:tr.recorded_by.username }}{% else %}—{% endif %}
             </td>
           </tr>
           {% empty %}
