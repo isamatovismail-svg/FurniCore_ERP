@@ -91,7 +91,7 @@
           {% for item in orders_cost_data %}
           <tr class="hover:bg-gray-50/70 transition-colors">
             <td class="px-5 py-3.5 font-bold" style="color:#173B35;">
-              <a href="{% url 'production:order_detail' item.order.pk %}" class="hover:underline">
+              <a href="{% url 'production:detail' item.order.pk %}" class="hover:underline">
                 {{ item.order.order_number }}
               </a>
               <div class="text-[10px] text-gray-400 font-normal">{{ item.order.get_status_display }}</div>

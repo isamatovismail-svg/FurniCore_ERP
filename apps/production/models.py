@@ -295,6 +295,10 @@ class ProductionOrder(models.Model):
         return f'{self.order_number} — {self.product.name} ({self.quantity_planned} шт)'
 
     @property
+    def quantity(self) -> Decimal:
+        return self.quantity_planned
+
+    @property
     def total_planned_cost_kzt(self) -> Decimal:
         return self.planned_cost_kzt
 

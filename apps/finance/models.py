@@ -55,7 +55,7 @@ class FinancialAccount(models.Model):
 
     @property
     def created_by(self):
-        return self.recorded_by
+        return getattr(self, 'recorded_by', None)
 
     def __str__(self):
         return f'{self.name} ({self.current_balance_kzt:,.2f} ₸)'
@@ -70,6 +70,9 @@ class FinancialAccount(models.Model):
 
     @property
     def type_label(self):
+        return self.get_account_type_display()
+
+    def get_type_display(self):
         return self.get_account_type_display()
 
 

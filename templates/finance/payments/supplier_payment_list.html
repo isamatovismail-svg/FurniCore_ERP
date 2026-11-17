@@ -88,7 +88,7 @@
               {{ p.payment_number }}
             </td>
             <td class="px-5 py-3.5 text-gray-500">
-              {{ p.payment_date|date:"d.m.Y H:i" }}
+              {{ p.payment_date|date:"d.m.Y" }}
             </td>
             <td class="px-5 py-3.5 font-medium text-gray-900">
               {{ p.supplier.name|default:"—" }}

@@ -363,7 +363,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([])
         ws.append(["Детализация расходов по статьям:"])
         for cat in kpis['expenses_breakdown']:
-            ws.append([cat['label'], float(cat['total']), f"{cat['percent']}% от общих расходов"])
+            ws.append([str(cat['label']), float(cat['total']), f"{cat['percent']}% от общих расходов"])
 
     elif report_type == 'cashflow':
         ws.title = "Отчёт ДДС"
@@ -386,7 +386,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             name = acc.name if hasattr(acc, 'name') else acc.get('name', '—')
             bal = float(acc.current_balance_kzt) if hasattr(acc, 'current_balance_kzt') else float(acc.get('balance_kzt', 0.0))
             t_label = acc.type_label if hasattr(acc, 'type_label') else acc.get('type_label', '')
-            ws.append([name, bal, t_label])
+            ws.append([name, bal, str(t_label)])
 
     elif report_type == 'receivables':
         ws.title = "Дебиторка"
@@ -408,7 +408,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
                 float(o.total_amount_kzt),
                 float(o.paid_amount_kzt),
                 float(o.remaining_debt_kzt),
-                o.get_payment_status_display() if hasattr(o, 'get_payment_status_display') else o.payment_status
+                str(getattr(o, 'payment_status_display', o.payment_status))
             ])
 
     elif report_type == 'payables':
@@ -431,7 +431,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
                 float(p.total_amount_kzt),
                 float(p.paid_amount_kzt),
                 float(p.remaining_debt_kzt),
-                p.get_payment_status_display() if hasattr(p, 'get_payment_status_display') else p.payment_status
+                str(getattr(p, 'payment_status_display', p.payment_status))
             ])
 
     elif report_type == 'costing':
@@ -453,8 +453,8 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             ws.append([
                 po.order_number,
                 po.product.name if po.product else "—",
-                po.quantity,
-                po.get_status_display(),
+                float(po.quantity_planned),
+                str(po.get_status_display()),
                 float(cost_info['planned_materials_cost_kzt']),
                 float(cost_info['actual_materials_cost_kzt']),
                 float(cost_info['labor_and_overhead_cost_kzt']),

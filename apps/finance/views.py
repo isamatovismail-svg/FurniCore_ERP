@@ -139,7 +139,7 @@ def customer_payment_list(request):
     status_filter = request.GET.get('status', '')
 
     payments = CustomerPayment.objects.select_related(
-        'customer', 'sales_order', 'account', 'created_by'
+        'customer', 'sales_order', 'account', 'recorded_by'
     ).order_by('-payment_date')
 
     if q:
@@ -218,7 +218,7 @@ def customer_payment_create(request):
                 account=account,
                 payment_method=payment_method,
                 notes=notes,
-                created_by=request.user
+                recorded_by=request.user
             )
             messages.success(request, f'Оплата № {payment.payment_number} на сумму {payment.amount_kzt:,.2f} ₸ успешно принята.')
             if sales_order:
@@ -250,7 +250,7 @@ def customer_payment_create(request):
 @login_required
 def customer_payment_pdf(request, pk):
     """Скачать квитанцию об оплате покупателя в PDF."""
-    payment = get_object_or_404(CustomerPayment.objects.select_related('customer', 'sales_order', 'account', 'created_by'), pk=pk)
+    payment = get_object_or_404(CustomerPayment.objects.select_related('customer', 'sales_order', 'account', 'recorded_by'), pk=pk)
     pdf_bytes = generate_customer_payment_pdf(payment)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     filename = f"Receipt_{payment.payment_number}.pdf"
@@ -288,7 +288,7 @@ def supplier_payment_list(request):
     status_filter = request.GET.get('status', '')
 
     payments = SupplierPayment.objects.select_related(
-        'supplier', 'purchase_order', 'account', 'created_by'
+        'supplier', 'purchase_order', 'account', 'recorded_by'
     ).order_by('-payment_date')
 
     if q:
@@ -366,7 +366,7 @@ def supplier_payment_create(request):
                 account=account,
                 payment_method=payment_method,
                 notes=notes,
-                created_by=request.user
+                recorded_by=request.user
             )
             messages.success(request, f'Выплата поставщику № {payment.payment_number} на сумму {payment.amount_kzt:,.2f} ₸ проведена.')
             if purchase_order:
@@ -398,7 +398,7 @@ def supplier_payment_create(request):
 @login_required
 def supplier_payment_pdf(request, pk):
     """Скачать платёжный ордер поставщику в PDF."""
-    payment = get_object_or_404(SupplierPayment.objects.select_related('supplier', 'purchase_order', 'account', 'created_by'), pk=pk)
+    payment = get_object_or_404(SupplierPayment.objects.select_related('supplier', 'purchase_order', 'account', 'recorded_by'), pk=pk)
     pdf_bytes = generate_supplier_payment_pdf(payment)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     filename = f"PaymentOrder_{payment.payment_number}.pdf"
@@ -433,11 +433,11 @@ def supplier_payment_storno(request, pk):
 def account_list(request):
     """Счета фабрики, кассы и межбанковские переводы."""
     ensure_default_accounts()
-    accounts = FinancialAccount.objects.all().order_by('type', 'name')
+    accounts = FinancialAccount.objects.all().order_by('account_type', 'name')
     total_balance = sum(a.balance_kzt for a in accounts if a.is_active)
 
     recent_transfers = AccountTransfer.objects.select_related(
-        'from_account', 'to_account', 'created_by'
+        'from_account', 'to_account', 'recorded_by'
     ).order_by('-transfer_date')[:10]
 
     context = {
@@ -473,7 +473,7 @@ def account_transfer(request):
                 to_account=to_acc,
                 amount_kzt=amount_kzt,
                 notes=notes,
-                created_by=request.user
+                recorded_by=request.user
             )
             messages.success(request, f'Перевод № {transfer.transfer_number} на сумму {transfer.amount_kzt:,.2f} ₸ успешно проведён.')
             return redirect('finance:accounts')

@@ -118,6 +118,7 @@ def product_create(request):
         description = request.POST.get('description', '').strip()
         cost = Decimal(str(request.POST.get('production_cost_kzt') or '0.00'))
         price = Decimal(str(request.POST.get('sale_price_kzt') or '0.00'))
+        image = request.FILES.get('image')
 
         if not sku or not name:
             messages.error(request, 'Артикул и наименование изделия обязательны.')
@@ -133,6 +134,7 @@ def product_create(request):
                 description=description,
                 production_cost_kzt=cost,
                 sale_price_kzt=price,
+                image=image,
             )
             # Инициализация баланса на WH-2
             wh2 = Warehouse.objects.filter(warehouse_type=WarehouseType.FINISHED_PRODUCTS).first()
@@ -181,6 +183,8 @@ def product_edit(request, pk):
             product.description = description
             product.production_cost_kzt = cost
             product.sale_price_kzt = price
+            if 'image' in request.FILES:
+                product.image = request.FILES['image']
             product.save()
             messages.success(request, f'Карточка изделия «{product.name}» обновлена.')
             return redirect('products:detail', pk=product.id)

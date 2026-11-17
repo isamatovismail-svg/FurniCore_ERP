@@ -174,7 +174,7 @@ def storno_customer_payment(payment: CustomerPayment, user: User, reason: str = 
         entity_id=str(pay.id),
         details={
             'payment_number': pay.payment_number,
-            'sales_order': pay.sales_order.order_number,
+            'sales_order': pay.sales_order.order_number if pay.sales_order else None,
             'storno_amount': float(pay.amount_kzt),
             'reason': reason,
         },
@@ -290,7 +290,8 @@ def storno_supplier_payment(payment: SupplierPayment, user: User, reason: str = 
         entity_id=str(pay.id),
         details={
             'payment_number': pay.payment_number,
-            'supplier': pay.supplier.name,
+            'supplier': pay.supplier.name if pay.supplier else None,
+            'purchase_order': pay.purchase_order.order_number if pay.purchase_order else None,
             'storno_amount': float(pay.amount_kzt),
             'reason': reason,
         },
