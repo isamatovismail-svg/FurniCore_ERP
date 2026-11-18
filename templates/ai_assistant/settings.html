@@ -1,0 +1,109 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Настройки AI-ассистента{% endblock %}
+{% block breadcrumb %}AI-ассистент / Настройки и интеграция{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 shadow-2xs">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold text-gray-800">Конфигурация AI-ассистента</h1>
+        <p class="text-xs text-gray-400">Параметры подключения OpenAI API и правила безопасности данных ERP</p>
+      </div>
+    </div>
+    <a href="{% url 'ai_assistant:index' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:text-primary-700 bg-white transition-all shadow-2xs">
+      ← Вернуться в чат
+    </a>
+  </div>
+
+  <!-- Status Card -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-5 space-y-4">
+    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider text-xs">Текущий статус интеграции</h2>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+      <div class="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+        <span class="text-gray-400 block mb-1">Режим работы</span>
+        {% if ai_config.has_key %}
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            LIVE API (OpenAI)
+          </span>
+        {% else %}
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800 border border-amber-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            DEMO AI MODE
+          </span>
+        {% endif %}
+      </div>
+
+      <div class="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+        <span class="text-gray-400 block mb-1">Целевая модель</span>
+        <span class="font-semibold text-gray-800">{{ ai_config.model }}</span>
+      </div>
+
+      <div class="p-4 rounded-xl border border-gray-100 bg-gray-50/50">
+        <span class="text-gray-400 block mb-1">Статус API-ключа</span>
+        <span class="font-mono text-gray-700">{{ ai_config.masked_key }}</span>
+      </div>
+    </div>
+
+    {% if not ai_config.has_key %}
+    <div class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+      <strong>Режим демонстрации включён:</strong> Поскольку в файле конфигурации <code>.env</code> не задан параметр <code>OPENAI_API_KEY</code>, ассистент использует встроенный локальный модуль анализа. Все запросы обрабатываются на базе реальных данных PostgreSQL мебельной фабрики (остатки сырья WH-1, готовая мебель WH-2, заказы цеха, финансовые счета) без внешних сетевых обращений.
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- How to Connect Guide -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-5 space-y-4">
+    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider text-xs">Инструкция по подключению OpenAI API</h2>
+    <div class="text-xs text-gray-600 space-y-3 leading-relaxed">
+      <p>Для подключения внешней нейросетевой модели добавьте следующие переменные в локальный файл <code>.env</code> в корне проекта:</p>
+      
+      <pre class="bg-gray-900 text-emerald-400 p-3.5 rounded-lg font-mono text-[11px] overflow-x-auto">
+# OpenAI API Settings
+OPENAI_API_KEY=sk-proj-your-actual-openai-api-key-here
+OPENAI_MODEL=gpt-4o-mini
+</pre>
+
+      <div class="space-y-1.5 pt-2">
+        <p class="font-semibold text-gray-800">Рекомендуемые модели:</p>
+        <ul class="list-disc list-inside space-y-1 text-gray-600">
+          <li><code>gpt-4o-mini</code> (по умолчанию) — высокая скорость, минимальная стоимость токенов, отличный анализ ERP данных.</li>
+          <li><code>gpt-4o</code> — для углублённых рассуждений и сложных аналитических сводок.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security & ERP Invariants -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-5 space-y-4">
+    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider text-xs">Архитектурные принципы безопасности AI</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-600">
+      <div class="p-3.5 rounded-lg border border-gray-100 bg-gray-50">
+        <span class="font-bold text-gray-800 block mb-1">🔒 Изоляция API-ключа</span>
+        Ключ считывается только бэкендом на стороне сервера и никогда не передаётся в клиентский JavaScript, HTML-шаблоны или логи.
+      </div>
+      <div class="p-3.5 rounded-lg border border-gray-100 bg-gray-50">
+        <span class="font-bold text-gray-800 block mb-1">🛡️ Режим Read-Only</span>
+        AI-ассистент имеет исключительно доступ на чтение агрегированных данных. Он не может самостоятельно списывать сырьё, проводить платежи или менять статусы заказов.
+      </div>
+      <div class="p-3.5 rounded-lg border border-gray-100 bg-gray-50">
+        <span class="font-bold text-gray-800 block mb-1">👤 Конфиденциальность</span>
+        Пароли пользователей, персональные идентификаторы и конфиденциальные данные клиентов не передаются во внешний контекст промпта.
+      </div>
+      <div class="p-3.5 rounded-lg border border-gray-100 bg-gray-50">
+        <span class="font-bold text-gray-800 block mb-1">⚡ Отказоустойчивость</span>
+        В случае превышения лимитов или сбоев внешнего сервиса ассистент мгновенно переходит в локальный DEMO-режим без сбоя работы приложения.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

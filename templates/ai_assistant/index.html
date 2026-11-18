@@ -17,10 +17,24 @@
       <div>
         <div class="flex items-center gap-2">
           <h1 class="text-base font-bold text-gray-800">Интеллектуальный ассистент FurniCore</h1>
-          <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">LLM ERP Copilot</span>
+          {% if ai_config.has_key %}
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+              OpenAI {{ ai_config.model }} (LIVE API)
+            </span>
+          {% else %}
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+              ⚡ DEMO AI MODE (Локальная база ERP)
+            </span>
+          {% endif %}
         </div>
-        <p class="text-xs text-gray-400 mt-0.5">Мгновенный анализ остатков сырья, статусов заказов цеха и финансовых показателей фабрики</p>
+        <p class="text-xs text-gray-400 mt-0.5">Оперативный анализ остатков сырья, производственных заказов цеха и финансов фабрики</p>
       </div>
+    </div>
+    <div>
+      <a href="{% url 'ai_assistant:settings' %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:text-primary-700 hover:border-primary-500 bg-white transition-all shadow-2xs">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Настройки API
+      </a>
     </div>
   </div>
 
@@ -34,11 +48,16 @@
       </div>
       <div class="p-4 rounded-2xl rounded-tl-none bg-gray-50 border border-gray-100 max-w-2xl text-xs text-gray-700 leading-relaxed shadow-2xs">
         <p class="font-semibold text-gray-900 mb-1">Здравствуйте! Я AI-ассистент ERP-системы FurniCore.</p>
-        <p>Я подключён к рабочей базе данных PostgreSQL и могу предоставить оперативную информацию:</p>
+        {% if not ai_config.has_key %}
+          <div class="p-2 mb-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+            <strong>Примечание:</strong> В данный момент активен <strong>DEMO AI MODE</strong>. Ответы формируются локальным аналитическим модулем на основе актуальных данных PostgreSQL без обращения к внешним серверам.
+          </div>
+        {% endif %}
+        <p>Вы можете запросить информацию по фабрике:</p>
         <ul class="list-disc list-inside mt-2 space-y-1 text-gray-600">
           <li>Остатки сырья на складе WH-1 и дефицитные позиции</li>
-          <li>Количество готовой мебели на складе WH-2 и резервы</li>
-          <li>Статусы производственных заказов в цехе</li>
+          <li>Количество готовой мебели на складе WH-2 и резервы под клиентов</li>
+          <li>Статусы производственных заказов в цехе и этапы ОТК</li>
           <li>Выручка, расходы и финансовый результат предприятия</li>
         </ul>
       </div>
@@ -50,7 +69,7 @@
         {% if msg.role == 'user' %}bg-primary-700 text-white{% else %}bg-primary-50 text-primary-700{% endif %}">
         {% if msg.role == 'user' %}{{ request.user.username|slice:":2"|upper }}{% else %}AI{% endif %}
       </div>
-      <div class="p-3.5 rounded-2xl text-xs leading-relaxed max-w-2xl
+      <div class="p-3.5 rounded-2xl text-xs leading-relaxed max-w-2xl whitespace-pre-wrap
         {% if msg.role == 'user' %}bg-primary-700 text-white rounded-tr-none shadow-xs{% else %}bg-gray-50 border border-gray-100 text-gray-800 rounded-tl-none shadow-2xs{% endif %}">
         {{ msg.content }}
       </div>
@@ -72,6 +91,10 @@
     <button onclick="sendQuickPrompt('Какая текущая выручка и прибыль фабрики?')"
             class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-primary-500 hover:text-primary-700 whitespace-nowrap shadow-2xs transition-all">
       📊 Выручка и прибыль
+    </button>
+    <button onclick="sendQuickPrompt('Сколько готовой мебели на складе WH-2?')"
+            class="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-primary-500 hover:text-primary-700 whitespace-nowrap shadow-2xs transition-all">
+      🛋️ Мебель на WH-2
     </button>
   </div>
 

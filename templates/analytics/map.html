@@ -1,0 +1,245 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Карта логистики и партнёров{% endblock %}
+{% block breadcrumb %}Аналитика / География и логистика партнёров{% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+<style>
+  #logisticsMap {
+    height: 580px;
+    width: 100%;
+    border-radius: 0.75rem;
+    z-index: 10;
+  }
+  .leaflet-popup-content-wrapper {
+    border-radius: 0.75rem;
+    padding: 4px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  .custom-pin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    font-size: 11px;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header Card -->
+  <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-2xs" style="background:#173B35;">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-bold text-gray-800">Интерактивная карта логистики</h1>
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+            OpenStreetMap & Leaflet
+          </span>
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">Географическое распределение мебельной фабрики, складов сырья, поставщиков и клиентов</p>
+      </div>
+    </div>
+
+    <!-- Quick Filter Tabs -->
+    <div class="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl text-xs" id="mapFilters">
+      <button onclick="filterMap('all')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-white text-gray-800 shadow-2xs filter-btn active" data-type="all">
+        Все ({{ total_locations }})
+      </button>
+      <button onclick="filterMap('factory')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-gray-600 hover:text-gray-900 filter-btn" data-type="factory">
+        Фабрика & Склады (1)
+      </button>
+      <button onclick="filterMap('supplier')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-gray-600 hover:text-gray-900 filter-btn" data-type="supplier">
+        Поставщики ({{ suppliers_count }})
+      </button>
+      <button onclick="filterMap('customer')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-gray-600 hover:text-gray-900 filter-btn" data-type="customer">
+        Клиенты ({{ customers_count }})
+      </button>
+    </div>
+  </div>
+
+  <!-- Map and Detail Sidecar -->
+  <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+    <!-- Map Container -->
+    <div class="lg:col-span-3 bg-white rounded-xl border border-gray-200/80 shadow-2xs p-3">
+      <div id="logisticsMap"></div>
+      <div class="mt-2.5 px-2 flex items-center justify-between text-[11px] text-gray-400">
+        <span>Масштабируйте карту колёсиком мыши или кнопками +/-</span>
+        <span>Данные картографии: © <a href="https://www.openstreetmap.org/copyright" target="_blank" class="underline">OpenStreetMap</a> contributors</span>
+      </div>
+    </div>
+
+    <!-- Right Sidecar Details -->
+    <div class="space-y-4">
+
+      <!-- Legend -->
+      <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 space-y-3">
+        <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wider">Условные обозначения</h3>
+        <div class="space-y-2 text-xs">
+          <div class="flex items-center gap-2.5">
+            <span class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background:#173B35;"></span>
+            <span class="text-gray-700 font-medium">Фабрика FurniCore & WH-1/WH-2</span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <span class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background:#1E40AF;"></span>
+            <span class="text-gray-700 font-medium">Поставщики сырья</span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <span class="w-3.5 h-3.5 rounded-full flex-shrink-0" style="background:#D97706;"></span>
+            <span class="text-gray-700 font-medium">Клиенты и точки доставки</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cities summary -->
+      <div class="bg-white rounded-xl border border-gray-200/80 shadow-2xs p-4 space-y-3">
+        <h3 class="text-xs font-bold text-gray-800 uppercase tracking-wider">География логистики</h3>
+        <div class="space-y-2 text-xs text-gray-600">
+          <div class="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
+            <div class="font-bold text-gray-800 flex justify-between">
+              <span>г. Алматы</span>
+              <span class="text-emerald-700 font-semibold">База фабрики</span>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-0.5">Основное производство, WH-1, WH-2, КазДревМатериал, розничные заказчики.</p>
+          </div>
+
+          <div class="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
+            <div class="font-bold text-gray-800 flex justify-between">
+              <span>г. Астана</span>
+              <span class="text-blue-700 font-semibold">Северный филиал</span>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-0.5">МетизКомплект (фурнитура), корпоративные контракты.</p>
+          </div>
+
+          <div class="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
+            <div class="font-bold text-gray-800 flex justify-between">
+              <span>г. Шымкент</span>
+              <span class="text-amber-700 font-semibold">Южный регион</span>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-0.5">ИП Сатпаев (массив, ткани), региональные дистрибьюторы.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
+<script>
+  const locationsData = {{ locations_json|safe }};
+  let mapInstance = null;
+  let activeMarkers = [];
+
+  function initMap() {
+    // Center initially on Kazakhstan geographic midpoint or Almaty
+    mapInstance = L.map('logisticsMap').setView([45.0, 73.0], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(mapInstance);
+
+    renderMarkers('all');
+  }
+
+  function getPinHtml(loc) {
+    let iconChar = '🏢';
+    if (loc.type === 'supplier') iconChar = '📦';
+    if (loc.type === 'customer') iconChar = '🛋️';
+
+    return `
+      <div class="custom-pin" style="background:${loc.color}; width:28px; height:28px;">
+        <span>${iconChar}</span>
+      </div>
+    `;
+  }
+
+  function renderMarkers(filterType) {
+    // Clear previous markers
+    activeMarkers.forEach(m => mapInstance.removeLayer(m));
+    activeMarkers = [];
+
+    const bounds = [];
+
+    locationsData.forEach(loc => {
+      if (filterType !== 'all' && loc.type !== filterType) {
+        return;
+      }
+
+      const icon = L.divIcon({
+        html: getPinHtml(loc),
+        className: 'custom-leaflet-icon',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14],
+      });
+
+      const marker = L.marker([loc.lat, loc.lng], { icon: icon }).addTo(mapInstance);
+
+      const popupContent = `
+        <div style="font-family:sans-serif; min-width:200px;">
+          <div style="display:inline-block; font-size:9px; font-weight:bold; text-transform:uppercase; color:${loc.color}; margin-bottom:2px;">
+            ${loc.category_label}
+          </div>
+          <div style="font-size:13px; font-weight:bold; color:#1f2937; margin-bottom:4px;">
+            ${loc.name}
+          </div>
+          <div style="font-size:11px; color:#4b5563; margin-bottom:6px;">
+            📍 ${loc.address}
+          </div>
+          <div style="font-size:11px; color:#374151; background:#f9fafb; padding:6px; border-radius:6px; border:1px solid #e5e7eb;">
+            ${loc.details}
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent);
+      activeMarkers.push(marker);
+      bounds.push([loc.lat, loc.lng]);
+    });
+
+    if (bounds.length > 0) {
+      mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+    }
+  }
+
+  function filterMap(type) {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      if (btn.getAttribute('data-type') === type) {
+        btn.classList.add('bg-white', 'text-gray-800', 'shadow-2xs');
+        btn.classList.remove('text-gray-600');
+      } else {
+        btn.classList.remove('bg-white', 'text-gray-800', 'shadow-2xs');
+        btn.classList.add('text-gray-600');
+      }
+    });
+
+    renderMarkers(type);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initMap();
+  });
+</script>
+{% endblock %}

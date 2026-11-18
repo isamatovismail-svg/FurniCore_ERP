@@ -5,4 +5,5 @@ app_name = 'analytics'
 
 urlpatterns = [
     path('', views.index, name='index'),
+    path('map/', views.logistics_map, name='map'),
 ]
