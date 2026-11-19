@@ -17,11 +17,15 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('SECRET_KEY environment variable is required in production mode (DEBUG=False)!')
     SECRET_KEY = 'furnicore-default-development-secret-key-change-in-prod'
 
-allowed_hosts_raw = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,testserver')
+allowed_hosts_raw = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,testserver,.trycloudflare.com')
 ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_raw.split(',') if h.strip()]
+if '.trycloudflare.com' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.trycloudflare.com')
 
-csrf_origins_raw = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+csrf_origins_raw = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.trycloudflare.com')
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in csrf_origins_raw.split(',') if o.strip()]
+if 'https://*.trycloudflare.com' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('https://*.trycloudflare.com')
 
 # Application definition
 INSTALLED_APPS = [

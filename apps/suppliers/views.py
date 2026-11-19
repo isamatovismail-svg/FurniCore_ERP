@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.db.models import Count, Q, Sum
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.materials.models import Material
 from apps.suppliers.models import (
     Supplier,
@@ -77,6 +78,7 @@ def index(request):
 
 
 @login_required
+@deny_demo_viewer
 def supplier_create(request):
     """Создание нового контрагента-поставщика."""
     if not can_manage_procurement(request.user):
@@ -112,6 +114,7 @@ def supplier_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def supplier_edit(request, pk):
     """Редактирование карточки поставщика."""
     if not can_manage_procurement(request.user):
@@ -142,6 +145,7 @@ def supplier_edit(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def supplier_archive(request, pk):
     """Архивирование поставщика (безопасное отключение без удаления истории)."""
     if not can_manage_procurement(request.user):
@@ -208,6 +212,7 @@ def order_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def order_create(request):
     """Формирование нового заказа поставщику."""
     if not can_manage_procurement(request.user):
@@ -292,6 +297,7 @@ def order_detail(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_send(request, pk):
     """Отправка заказа поставщику (переход в статус SENT)."""
     if not can_manage_procurement(request.user):
@@ -308,6 +314,7 @@ def order_send(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_receive(request, pk):
     """Приемка поступивших материалов на склад WH-1 (полная или частичная)."""
     if not can_manage_procurement(request.user):
@@ -348,6 +355,7 @@ def order_receive(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_cancel(request, pk):
     """Отмена заказа поставщику."""
     if not can_manage_procurement(request.user):

@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.db.models import Sum, Q, Count
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.products.models import Product
 from apps.sales.models import SalesOrder, OrderStatus, Customer, SalesOrderItem
 from apps.sales.services import (
@@ -82,6 +83,7 @@ def index(request):
 
 
 @login_required
+@deny_demo_viewer
 def order_create(request):
     """Создание нового клиентского заказа со спецификацией изделий."""
     if not can_manage_sales(request.user):
@@ -180,6 +182,7 @@ def order_detail(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_reserve(request, pk):
     """Подтверждение заказа и резервирование мебели на WH-2."""
     if not can_manage_sales(request.user):
@@ -200,6 +203,7 @@ def order_reserve(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_create_production(request, pk):
     """Создание производственных заказов под дефицит мебели по клиентскому заказу."""
     if not can_manage_sales(request.user):
@@ -221,6 +225,7 @@ def order_create_production(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_ship(request, pk):
     """Отгрузка готовой мебели клиенту со склада WH-2 (частичная или полная)."""
     if not can_manage_sales(request.user):
@@ -258,6 +263,7 @@ def order_ship(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def order_cancel(request, pk):
     """Отмена клиентского заказа со снятием резервов с WH-2."""
     if not can_manage_sales(request.user):
@@ -328,6 +334,7 @@ def customers_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def customer_create(request):
     """Добавление нового клиента."""
     if not can_manage_sales(request.user):
@@ -365,6 +372,7 @@ def customer_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def customer_edit(request, pk):
     """Редактирование профиля клиента."""
     if not can_manage_sales(request.user):
@@ -396,6 +404,7 @@ def customer_edit(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def customer_archive(request, pk):
     """Архивирование клиента без потери связей с заказами."""
     if not can_manage_sales(request.user):

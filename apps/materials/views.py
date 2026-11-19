@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.materials.models import Material, MaterialCategory
 from apps.suppliers.models import Supplier
 from apps.warehouses.models import StockBalance, Warehouse, WarehouseType, WarehouseDocumentItem
@@ -82,6 +83,7 @@ def index(request):
 
 
 @login_required
+@deny_demo_viewer
 def material_create(request):
     """Создание нового материала / позиции сырья."""
     if not can_manage_materials(request.user):
@@ -138,6 +140,7 @@ def material_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def material_edit(request, pk):
     """Редактирование карточки материала."""
     if not can_manage_materials(request.user):
@@ -189,6 +192,7 @@ def material_edit(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def material_archive(request, pk):
     """Архивирование материала (безопасное снятие с активности)."""
     if not can_manage_materials(request.user):

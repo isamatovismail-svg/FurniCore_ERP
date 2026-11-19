@@ -11,6 +11,7 @@ class UserRole(models.TextChoices):
     WAREHOUSE_MANAGER = 'WAREHOUSE_MANAGER', _('Заведующий складом')
     SALES_MANAGER = 'SALES_MANAGER', _('Менеджер по продажам')
     WORKER = 'WORKER', _('Мастер цеха / Станочник')
+    DEMO_VIEWER = 'DEMO_VIEWER', _('Демонстрационный просмотр')
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -54,6 +55,11 @@ class User(AbstractUser):
     @property
     def is_sales_manager(self) -> bool:
         return self.role in [UserRole.OWNER, UserRole.ADMIN, UserRole.SALES_MANAGER]
+
+    @property
+    def is_demo_viewer(self) -> bool:
+        """Read-only demonstration role — cannot mutate any business data."""
+        return self.role == UserRole.DEMO_VIEWER
 
 class AuditLog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

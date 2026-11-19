@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.db.models import Sum, Count, Q, Avg, F
 from django.utils import timezone
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.production.models import (
     ProductionOrder,
     ProductionOrderStatus,
@@ -222,6 +223,7 @@ def index(request):
 # ==============================================================================
 
 @login_required
+@deny_demo_viewer
 def order_create(request):
     if not can_manage_production(request.user):
         messages.error(request, 'У вас недостаточно прав для создания производственных заказов.')
@@ -282,6 +284,7 @@ def order_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def order_edit(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
 
@@ -353,6 +356,7 @@ def detail(request, pk):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def order_issue_materials(request, pk):
     """Выдача материалов со склада WH-1 под заказ."""
     order = get_object_or_404(ProductionOrder, pk=pk)
@@ -372,6 +376,7 @@ def order_issue_materials(request, pk):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def order_launch(request, pk):
     """Запуск заказа в производство."""
     order = get_object_or_404(ProductionOrder, pk=pk)
@@ -391,8 +396,13 @@ def order_launch(request, pk):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def stage_advance_action(request, stage_id):
     """Фиксация завершения этапа мастером."""
+    if not (can_manage_production(request.user) or request.user.role == UserRole.WORKER):
+        messages.error(request, 'Недостаточно прав для перевода производственного этапа.')
+        return redirect('production:index')
+
     stage = get_object_or_404(ProductionStage.objects.select_related('production_order'), pk=stage_id)
     order = stage.production_order
 
@@ -417,11 +427,15 @@ def stage_advance_action(request, stage_id):
 
 
 @login_required
+@deny_demo_viewer
 def order_qc_inspect(request, pk):
     """Страница и форма контроля качества (ОТК)."""
     order = get_object_or_404(ProductionOrder, pk=pk)
 
     if request.method == 'POST':
+        if not can_manage_production(request.user):
+            messages.error(request, 'Недостаточно прав для оформления ОТК.')
+            return redirect('production:detail', pk=order.id)
         form = QualityCheckForm(request.POST)
         if form.is_valid():
             qc = form.save(commit=False)
@@ -463,6 +477,7 @@ def order_qc_inspect(request, pk):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def order_transfer_wh2(request, pk):
     """Сдача готовой партии мебели на склад готовой продукции (WH-2)."""
     order = get_object_or_404(ProductionOrder, pk=pk)
@@ -642,6 +657,7 @@ def bom_detail(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def bom_create(request):
     if not can_manage_production(request.user):
         messages.error(request, 'Недостаточно прав для создания спецификаций BOM.')
@@ -739,10 +755,14 @@ def waste_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def waste_create(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
 
     if request.method == 'POST':
+        if not (can_manage_production(request.user) or request.user.role == UserRole.WORKER):
+            messages.error(request, 'Недостаточно прав для регистрации брака/отходов.')
+            return redirect('production:detail', pk=order.id)
         form = ProductionWasteForm(request.POST)
         if form.is_valid():
             waste = form.save(commit=False)

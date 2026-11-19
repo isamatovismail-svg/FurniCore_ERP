@@ -8,6 +8,7 @@ from django.db.models import Sum, Q, Count
 from django.utils import timezone
 
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.finance.models import (
     FinancialAccount,
     AccountType,
@@ -167,6 +168,7 @@ def customer_payment_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def customer_payment_create(request):
     """
     Регистрация оплаты от покупателя (с привязкой к заказу или аванс).
@@ -259,6 +261,7 @@ def customer_payment_pdf(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def customer_payment_storno(request, pk):
     """Сторнирование оплаты покупателя."""
     if not can_manage_finance(request.user):
@@ -315,6 +318,7 @@ def supplier_payment_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def supplier_payment_create(request):
     """
     Регистрация оплаты поставщику (с привязкой к заказу закупки).
@@ -407,6 +411,7 @@ def supplier_payment_pdf(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def supplier_payment_storno(request, pk):
     """Сторнирование оплаты поставщику."""
     if not can_manage_finance(request.user):
@@ -451,6 +456,7 @@ def account_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def account_transfer(request):
     """Перевод средств между счетами фабрики (инкассация, пополнение)."""
     if not can_manage_finance(request.user):
@@ -524,6 +530,7 @@ def expense_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def expense_create(request):
     """Регистрация нового операционного расхода."""
     if not can_manage_finance(request.user):
@@ -569,6 +576,7 @@ def expense_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def expense_storno(request, pk):
     """Сторнирование операционного расхода."""
     if not can_manage_finance(request.user):

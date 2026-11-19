@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.warehouses.models import (
     Warehouse,
     StockBalance,
@@ -285,6 +286,7 @@ def document_detail(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def document_create(request):
     default_wh = request.GET.get('wh', 'WH-1')
     default_type = request.GET.get('type', WarehouseDocumentType.RECEIPT)
@@ -406,6 +408,7 @@ def document_create(request):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def document_post(request, pk):
     doc = get_object_or_404(WarehouseDocument, pk=pk)
 
@@ -424,6 +427,7 @@ def document_post(request, pk):
 
 @login_required
 @require_POST
+@deny_demo_viewer
 def document_cancel(request, pk):
     doc = get_object_or_404(WarehouseDocument, pk=pk)
 
@@ -469,6 +473,7 @@ def inventory_list(request):
 
 
 @login_required
+@deny_demo_viewer
 def inventory_create(request):
     if not can_user_manage_warehouses(request.user):
         messages.error(request, 'У вас недостаточно прав для создания инвентаризации.')
@@ -492,6 +497,7 @@ def inventory_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def inventory_detail(request, pk):
     doc = get_object_or_404(
         WarehouseDocument.objects.select_related('warehouse', 'created_by', 'posted_by'),

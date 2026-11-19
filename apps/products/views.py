@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from apps.accounts.models import UserRole
+from apps.accounts.decorators import deny_demo_viewer
 from apps.products.models import Product, ProductCategory, ProductVariant
 from apps.warehouses.models import StockBalance, Warehouse, WarehouseType
 
@@ -103,6 +104,7 @@ def detail(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def product_create(request):
     """Создание нового изделия в каталоге."""
     if not can_manage_products(request.user):
@@ -152,6 +154,7 @@ def product_create(request):
 
 
 @login_required
+@deny_demo_viewer
 def product_edit(request, pk):
     """Редактирование карточки изделия."""
     if not can_manage_products(request.user):
@@ -197,6 +200,7 @@ def product_edit(request, pk):
 
 
 @login_required
+@deny_demo_viewer
 def product_archive(request, pk):
     """Архивирование изделия."""
     if not can_manage_products(request.user):
