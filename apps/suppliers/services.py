@@ -1,10 +1,9 @@
 import uuid
 from decimal import Decimal
-from django.db import models, transaction
+from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from apps.accounts.models import AuditLog, UserRole
-from apps.materials.models import Material
+from apps.accounts.models import AuditLog
 from apps.suppliers.models import (
     Supplier,
     PurchaseOrder,

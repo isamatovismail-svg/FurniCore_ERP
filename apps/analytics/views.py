@@ -2,13 +2,12 @@ import json
 from decimal import Decimal
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Avg
+from django.db.models import Sum, Avg
 from apps.sales.models import SalesOrder, OrderStatus, Customer
 from apps.finance.models import Expense
 from apps.products.models import Product
 from apps.production.models import ProductionOrder, ProductionOrderStatus
-from apps.warehouses.models import Warehouse, WarehouseType
-from apps.suppliers.models import Supplier, PurchaseOrder
+from apps.suppliers.models import Supplier
 
 
 @login_required

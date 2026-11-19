@@ -89,6 +89,7 @@
             <th class="px-5 py-3 font-semibold text-right">Сумма (₸)</th>
             <th class="px-5 py-3 font-semibold">Назначение</th>
             <th class="px-5 py-3 font-semibold">Инициатор</th>
+            <th class="px-5 py-3 font-semibold">Статус / действия</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -115,10 +116,24 @@
             <td class="px-5 py-3.5 text-gray-500">
               {% if tr.recorded_by %}{{ tr.recorded_by.get_full_name|default:tr.recorded_by.username }}{% else %}—{% endif %}
             </td>
+            <td class="px-5 py-3.5">
+              {% if tr.status == 'CANCELLED' %}
+              <span class="text-red-700">Сторнирован</span>
+              {% else %}
+              <span class="text-emerald-700">Проведён</span>
+              {% if can_manage %}
+              <form method="post" action="{% url 'finance:account_transfer_storno' tr.pk %}" class="mt-1">
+                {% csrf_token %}
+                <input name="reason" placeholder="Причина сторно" required class="mb-1 w-32 rounded border px-2 py-1 text-[10px]">
+                <button class="block text-red-700 underline">Сторнировать</button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="px-5 py-8 text-center text-gray-400">
+            <td colspan="8" class="px-5 py-8 text-center text-gray-400">
               Внутренние переводы ещё не совершались
             </td>
           </tr>

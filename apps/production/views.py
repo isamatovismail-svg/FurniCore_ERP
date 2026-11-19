@@ -4,9 +4,9 @@ import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
 from django.contrib import messages
-from django.db.models import Sum, Count, Q, Avg, F
+from django.db import transaction
+from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from apps.accounts.models import UserRole
 from apps.accounts.decorators import deny_demo_viewer
@@ -18,17 +18,14 @@ from apps.production.models import (
     StageStatus,
     BOM,
     BOMItem,
-    MaterialConsumption,
     ProductionWaste,
     WasteType,
     RoutingTemplate,
-    RoutingStage,
 )
 from apps.products.models import Product, ProductCategory
 from apps.materials.models import Material
 from apps.employees.models import Employee, Department
-from apps.sales.models import SalesOrder
-from apps.quality.models import QualityCheck, QCResult
+from apps.quality.models import QCResult
 from apps.production.forms import (
     ProductionOrderForm,
     BOMForm,
@@ -45,6 +42,7 @@ from apps.production.services import (
     complete_and_transfer_to_warehouse,
     recalculate_order_costs,
     ensure_default_routing_templates,
+    initialize_order_stages,
 )
 
 
@@ -232,26 +230,27 @@ def order_create(request):
     if request.method == 'POST':
         form = ProductionOrderForm(request.POST)
         if form.is_valid():
-            order = form.save(commit=False)
-            order.order_number = generate_po_number()
-            order.created_by = request.user
-            order.status = ProductionOrderStatus.WAITING
+            with transaction.atomic():
+                order = form.save(commit=False)
+                order.order_number = generate_po_number()
+                order.created_by = request.user
+                order.status = ProductionOrderStatus.WAITING
 
-            # Если выбран BOM, берем плановую себестоимость
-            if order.bom:
-                recalculate_order_costs(order)
-            else:
-                # Находим активный BOM изделия
-                default_bom = BOM.objects.filter(product=order.product, is_active=True).first()
-                if default_bom:
-                    order.bom = default_bom
+                # Если выбран BOM, берем плановую себестоимость
+                if order.bom:
                     recalculate_order_costs(order)
+                else:
+                    # Находим активный BOM изделия
+                    default_bom = BOM.objects.filter(product=order.product, is_active=True).first()
+                    if default_bom:
+                        order.bom = default_bom
+                        recalculate_order_costs(order)
 
-            order.save()
-            form.save_m2m()
+                order.save()
+                form.save_m2m()
 
-            # Инициализация этапов маршрута
-            initialize_order_stages(order)
+                # Инициализация этапов маршрута
+                initialize_order_stages(order)
 
             messages.success(request, f'Производственный заказ {order.order_number} успешно сформирован.')
             return redirect('production:detail', pk=order.id)

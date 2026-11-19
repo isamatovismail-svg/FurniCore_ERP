@@ -1,20 +1,11 @@
 from django import forms
-from decimal import Decimal
 from apps.production.models import (
     ProductionOrder,
     BOM,
-    BOMItem,
     ProductionWaste,
-    WasteType,
-    OrderPriority,
-    ProductionOrderStatus,
-    RoutingTemplate,
 )
-from apps.products.models import Product, ProductVariant
 from apps.employees.models import Employee, Department
-from apps.sales.models import SalesOrder
-from apps.materials.models import Material
-from apps.quality.models import QualityCheck, QCResult
+from apps.quality.models import QualityCheck
 
 
 class ProductionOrderForm(forms.ModelForm):

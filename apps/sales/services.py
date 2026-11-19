@@ -1,17 +1,16 @@
 import datetime
 import uuid
 from decimal import Decimal
-from django.db import models, transaction
+from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from apps.accounts.models import AuditLog, UserRole
+from apps.accounts.models import AuditLog
 from apps.sales.models import (
     Customer,
     SalesOrder,
     SalesOrderItem,
     OrderStatus,
 )
-from apps.products.models import Product
 from apps.production.models import ProductionOrder, ProductionOrderStatus, OrderPriority, BOM
 from apps.production.services import generate_order_number, recalculate_order_costs, initialize_order_stages
 from apps.warehouses.models import (

@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from apps.accounts.models import AuditLog, UserRole
+from apps.accounts.models import AuditLog
 from apps.warehouses.models import (
     Warehouse,
     WarehouseType,
@@ -20,7 +20,6 @@ from apps.production.models import (
     ProductionStage,
     StageStatus,
     BOM,
-    BOMItem,
     MaterialConsumption,
     ProductionWaste,
     WasteType,

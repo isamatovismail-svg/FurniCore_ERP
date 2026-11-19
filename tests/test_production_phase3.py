@@ -517,3 +517,108 @@ def test_16_my_tasks_worker_interface(client, prod_env):
 
     resp_waste = client.get('/production/waste/')
     assert resp_waste.status_code == 200
+
+
+@pytest.mark.django_db
+def test_17_order_create_post_success_and_stages_initialization(client, prod_env):
+    """17. Успешное создание производственного заказа через POST /production/create/ и корректная инициализация этапов."""
+    client.force_login(prod_env['mgr_user'])
+    today = timezone.localdate()
+
+    initial_orders_count = ProductionOrder.objects.count()
+
+    post_data = {
+        'product': prod_env['product'].id,
+        'quantity_planned': 3,
+        'priority': OrderPriority.HIGH,
+        'planned_start': today.strftime('%Y-%m-%d'),
+        'planned_end': (today + datetime.timedelta(days=10)).strftime('%Y-%m-%d'),
+        'bom': prod_env['bom'].id,
+        'notes': 'Срочный заказ на 3 шкафа',
+    }
+
+    resp = client.post('/production/create/', data=post_data)
+    assert resp.status_code == 302, f"Expected redirect, got status {resp.status_code}"
+    assert resp.url.startswith('/production/'), f"Redirected to unexpected URL: {resp.url}"
+
+    assert ProductionOrder.objects.count() == initial_orders_count + 1
+    new_order = ProductionOrder.objects.order_by('-id').first()
+    assert new_order.product == prod_env['product']
+    assert new_order.quantity_planned == Decimal('3.00')
+    assert new_order.status == ProductionOrderStatus.WAITING
+    assert new_order.bom == prod_env['bom']
+    assert new_order.order_number.startswith('PO-')
+
+    # Проверка создания этапов
+    stages = new_order.stages.order_by('sequence')
+    stage_count = stages.count()
+    assert stage_count > 0, "Stages were not initialized for the created order"
+
+    # Проверка свойств этапов
+    for stage in stages:
+        assert stage.status == StageStatus.PENDING
+        assert stage.stage_name
+        assert stage.workstation
+        assert stage.planned_hours > Decimal('0.00')
+
+    # Проверка идемпотентности: повторный вызов не дублирует этапы
+    initialize_order_stages(new_order)
+    assert new_order.stages.count() == stage_count, "Repeated initialize_order_stages must not duplicate stages"
+
+
+@pytest.mark.django_db
+def test_18_order_create_post_blocked_for_demo_viewer(client, prod_env):
+    """18. Запрет создания производственного заказа для роли DEMO_VIEWER (HTTP 302 / 403, заказ не создаётся)."""
+    demo_viewer, _ = User.objects.get_or_create(
+        username='demo_tester_prod',
+        defaults={'email': 'demo_viewer@furnicore.kz', 'role': UserRole.DEMO_VIEWER}
+    )
+    demo_viewer.role = UserRole.DEMO_VIEWER
+    demo_viewer.save()
+
+    client.force_login(demo_viewer)
+    today = timezone.localdate()
+
+    orders_count_before = ProductionOrder.objects.count()
+
+    post_data = {
+        'product': prod_env['product'].id,
+        'quantity_planned': 2,
+        'priority': OrderPriority.NORMAL,
+        'planned_start': today.strftime('%Y-%m-%d'),
+        'planned_end': (today + datetime.timedelta(days=7)).strftime('%Y-%m-%d'),
+        'bom': prod_env['bom'].id,
+    }
+
+    # Обычный POST запрос блокируется декоратором @deny_demo_viewer
+    resp = client.post('/production/create/', data=post_data)
+    assert resp.status_code == 302
+    assert ProductionOrder.objects.count() == orders_count_before, "Order must NOT be created by DEMO_VIEWER"
+
+    # HTMX запрос блокируется с кодом 403 Forbidden
+    resp_htmx = client.post('/production/create/', data=post_data, HTTP_HX_REQUEST='true')
+    assert resp_htmx.status_code == 403
+    assert ProductionOrder.objects.count() == orders_count_before, "Order must NOT be created by DEMO_VIEWER via HTMX"
+
+
+@pytest.mark.django_db
+def test_19_order_create_post_blocked_for_unauthorized_roles(client, prod_env):
+    """19. Запрет создания заказа для рабочих (WORKER): редирект с ошибкой прав."""
+    client.force_login(prod_env['worker_user'])
+    today = timezone.localdate()
+
+    orders_count_before = ProductionOrder.objects.count()
+
+    post_data = {
+        'product': prod_env['product'].id,
+        'quantity_planned': 1,
+        'priority': OrderPriority.NORMAL,
+        'planned_start': today.strftime('%Y-%m-%d'),
+        'planned_end': (today + datetime.timedelta(days=5)).strftime('%Y-%m-%d'),
+    }
+
+    resp = client.post('/production/create/', data=post_data)
+    assert resp.status_code == 302
+    assert resp.url == '/production/'
+    assert ProductionOrder.objects.count() == orders_count_before, "Order must NOT be created by WORKER"
+

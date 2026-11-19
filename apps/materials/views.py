@@ -7,8 +7,7 @@ from apps.accounts.models import UserRole
 from apps.accounts.decorators import deny_demo_viewer
 from apps.materials.models import Material, MaterialCategory
 from apps.suppliers.models import Supplier
-from apps.warehouses.models import StockBalance, Warehouse, WarehouseType, WarehouseDocumentItem
-from apps.production.models import BOMItem
+from apps.warehouses.models import StockBalance, Warehouse, WarehouseType
 
 
 def can_manage_materials(user) -> bool:

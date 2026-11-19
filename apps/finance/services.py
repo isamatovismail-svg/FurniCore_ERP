@@ -1,10 +1,9 @@
-import datetime
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from apps.accounts.models import AuditLog, User, UserRole
+from apps.accounts.models import AuditLog, User
 from apps.sales.models import SalesOrder, Customer, OrderStatus
 from apps.suppliers.models import PurchaseOrder, Supplier, PurchaseOrderStatus
 from apps.finance.models import (
@@ -16,12 +15,39 @@ from apps.finance.models import (
     Expense,
     ExpenseCategory,
     GeneralIncome,
-    IncomeCategory,
     PaymentMethod,
     PaymentStatus,
 )
-from apps.production.models import ProductionOrder, ProductionOrderStatus
-from apps.warehouses.models import Warehouse, WarehouseType, StockMovement, MovementType
+from apps.production.models import ProductionOrder
+from apps.warehouses.models import StockMovement, MovementType
+
+
+def _money_amount(value) -> Decimal:
+    try:
+        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError('Укажите корректную сумму в KZT.')
+    if not amount.is_finite():
+        raise ValidationError('Сумма должна быть конечным числом.')
+    return amount
+
+
+def _idempotent_operation(model, key, expected_fields):
+    if not key:
+        return None
+    existing = model.objects.filter(idempotency_key=key).first()
+    if existing is None:
+        return None
+    if any(getattr(existing, field) != value for field, value in expected_fields.items()):
+        raise ValidationError('Ключ повторной отправки уже использован для другой операции.')
+    return existing
+
+
+def _validate_account(account: FinancialAccount):
+    if not account.is_active:
+        raise ValidationError(f'Денежный счёт «{account.name}» не активен.')
+    if account.currency != 'KZT':
+        raise ValidationError('Финансовые операции доступны только для счетов в KZT.')
 
 
 def generate_payment_number(prefix: str = 'PAY') -> str:
@@ -34,9 +60,9 @@ def generate_payment_number(prefix: str = 'PAY') -> str:
 def ensure_default_accounts() -> list[FinancialAccount]:
     """Гарантирует существование базовых счетов предприятия."""
     defaults = [
-        ('Основная касса цеха', AccountType.CASH, '', Decimal('150000.00')),
-        ('Расчётный счёт Halyk Bank', AccountType.BANK, 'KZ246012345678901234', Decimal('2500000.00')),
-        ('Kaspi Pay (QR/Эквайринг)', AccountType.KASPI, 'KZ888012345678900001', Decimal('450000.00')),
+        ('Основная касса цеха', AccountType.CASH, '', Decimal('0.00')),
+        ('Расчётный счёт', AccountType.BANK, '', Decimal('0.00')),
+        ('Kaspi Pay (QR/Эквайринг)', AccountType.KASPI, '', Decimal('0.00')),
     ]
     accounts = []
     for name, acc_type, acc_num, init_bal in defaults:
@@ -71,42 +97,45 @@ def register_customer_payment(
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
+    idempotency_key=None,
 ) -> CustomerPayment:
     """Регистрация поступившего платежа от клиента по заказу покупателя."""
     user = user or created_by or recorded_by
-    amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
+    amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма платежа должна быть строго больше нуля.')
+    if payment_method not in PaymentMethod.values:
+        raise ValidationError('Выберите допустимый способ оплаты.')
 
     acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
-    if not acc.is_active:
-        raise ValidationError(f'Денежный счёт «{acc.name}» не активен.')
-
     so = None
     if sales_order:
         so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
         customer = customer or so.customer
-        remaining_debt = so.remaining_debt_kzt
-        if amount > remaining_debt:
-            raise ValidationError(
-                f'Сумма платежа ({amount:,.2f} ₸) превышает остаток долга по заказу {so.order_number} ({remaining_debt:,.2f} ₸).'
-            )
+    if not so:
+        raise ValidationError('Платёж покупателя должен быть привязан к заказу.')
+    if customer.pk != so.customer_id:
+        raise ValidationError('Покупатель не совпадает с покупателем выбранного заказа.')
 
-    if not customer and not so:
-        raise ValidationError('Необходимо указать клиента или заказ покупателя.')
+    replay = _idempotent_operation(CustomerPayment, idempotency_key, {
+        'sales_order_id': so.pk,
+        'customer_id': customer.pk,
+        'account_id': acc.pk,
+        'amount_kzt': amount,
+        'payment_method': payment_method,
+        'reference_number': reference_number,
+        'payment_date': payment_date or timezone.localdate(),
+        'notes': notes,
+    })
+    if replay:
+        return replay
+    _validate_account(acc)
 
-    # Защита от дублирования идентичного платежа в течение 10 секунд
-    recent_dup = CustomerPayment.objects.filter(
-        sales_order=so,
-        customer=customer,
-        account=acc,
-        amount_kzt=amount,
-        status=PaymentStatus.COMPLETED,
-        reference_number=reference_number,
-        created_at__gte=timezone.now() - datetime.timedelta(seconds=10),
-    ).first()
-    if recent_dup:
-        raise ValidationError(f'Платёж с такими параметрами уже зарегистрирован под номером {recent_dup.payment_number}.')
+    remaining_debt = so.remaining_debt_kzt
+    if amount > remaining_debt:
+        raise ValidationError(
+            f'Сумма платежа ({amount:,.2f} ₸) превышает остаток долга по заказу {so.order_number} ({remaining_debt:,.2f} ₸).'
+        )
 
     payment_num = generate_payment_number('PAY-C')
     p_date = payment_date or timezone.localdate()
@@ -123,6 +152,7 @@ def register_customer_payment(
         reference_number=reference_number,
         notes=notes,
         recorded_by=user,
+        idempotency_key=idempotency_key,
     )
 
     # Увеличение баланса денежного счёта
@@ -138,9 +168,9 @@ def register_customer_payment(
             'payment_number': payment.payment_number,
             'sales_order': so.order_number if so else None,
             'customer': customer.name if customer else None,
-            'amount': float(amount),
+            'amount': str(amount),
             'account': acc.name,
-            'new_balance': float(acc.current_balance_kzt),
+            'new_balance': str(acc.current_balance_kzt),
         },
     )
     return payment
@@ -175,7 +205,7 @@ def storno_customer_payment(payment: CustomerPayment, user: User, reason: str = 
         details={
             'payment_number': pay.payment_number,
             'sales_order': pay.sales_order.order_number if pay.sales_order else None,
-            'storno_amount': float(pay.amount_kzt),
+            'storno_amount': str(pay.amount_kzt),
             'reason': reason,
         },
     )
@@ -199,35 +229,50 @@ def register_supplier_payment(
     payment_date=None,
     reference_number: str = '',
     notes: str = '',
+    idempotency_key=None,
 ) -> SupplierPayment:
     """Регистрация выплаты поставщику по заказу на закупку или общему договору."""
     user = user or created_by or recorded_by
-    amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
+    amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма выплаты должна быть строго больше нуля.')
+    if payment_method not in PaymentMethod.values:
+        raise ValidationError('Выберите допустимый способ оплаты.')
 
     acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
-    if not acc.is_active:
-        raise ValidationError(f'Счёт «{acc.name}» не активен.')
-
-    if acc.current_balance_kzt < amount:
-        raise ValidationError(
-            f'Недостаточно средств на счёте «{acc.name}» для совершения выплаты. '
-            f'Доступно: {acc.current_balance_kzt:,.2f} ₸, требуется: {amount:,.2f} ₸.'
-        )
 
     po = None
     if purchase_order:
         po = PurchaseOrder.objects.select_for_update().get(pk=purchase_order.pk)
         supplier = supplier or po.supplier
-        rem_debt = po.remaining_debt_kzt
-        if amount > rem_debt:
-            raise ValidationError(
-                f'Сумма выплаты ({amount:,.2f} ₸) превышает остаток задолженности по заказу {po.order_number} ({rem_debt:,.2f} ₸).'
-            )
+    if not supplier:
+        raise ValidationError('Необходимо указать поставщика.')
+    if po and supplier.pk != po.supplier_id:
+        raise ValidationError('Поставщик не совпадает с поставщиком выбранного заказа закупки.')
 
-    if not supplier and not po:
-        raise ValidationError('Необходимо указать поставщика или заказ закупки.')
+    replay = _idempotent_operation(SupplierPayment, idempotency_key, {
+        'purchase_order_id': po.pk if po else None,
+        'supplier_id': supplier.pk,
+        'account_id': acc.pk,
+        'amount_kzt': amount,
+        'payment_method': payment_method,
+        'reference_number': reference_number,
+        'payment_date': payment_date or timezone.localdate(),
+        'notes': notes,
+    })
+    if replay:
+        return replay
+    _validate_account(acc)
+
+    if po and amount > po.remaining_debt_kzt:
+        raise ValidationError(
+            f'Сумма выплаты ({amount:,.2f} ₸) превышает остаток задолженности по заказу {po.order_number} ({po.remaining_debt_kzt:,.2f} ₸).'
+        )
+    if acc.current_balance_kzt < amount:
+        raise ValidationError(
+            f'Недостаточно средств на счёте «{acc.name}» для совершения выплаты. '
+            f'Доступно: {acc.current_balance_kzt:,.2f} ₸, требуется: {amount:,.2f} ₸.'
+        )
 
     payment_num = generate_payment_number('PAY-S')
     p_date = payment_date or timezone.localdate()
@@ -244,6 +289,7 @@ def register_supplier_payment(
         reference_number=reference_number,
         notes=notes,
         recorded_by=user,
+        idempotency_key=idempotency_key,
     )
 
     # Списание денежных средств со счёта
@@ -259,9 +305,9 @@ def register_supplier_payment(
             'payment_number': payment.payment_number,
             'supplier': supplier.name if supplier else None,
             'purchase_order': po.order_number if po else None,
-            'amount': float(amount),
+            'amount': str(amount),
             'account': acc.name,
-            'new_balance': float(acc.current_balance_kzt),
+            'new_balance': str(acc.current_balance_kzt),
         },
     )
     return payment
@@ -292,7 +338,7 @@ def storno_supplier_payment(payment: SupplierPayment, user: User, reason: str = 
             'payment_number': pay.payment_number,
             'supplier': pay.supplier.name if pay.supplier else None,
             'purchase_order': pay.purchase_order.order_number if pay.purchase_order else None,
-            'storno_amount': float(pay.amount_kzt),
+            'storno_amount': str(pay.amount_kzt),
             'reason': reason,
         },
     )
@@ -314,6 +360,7 @@ def transfer_between_accounts(
     transfer_date=None,
     notes: str = '',
     description: str = '',
+    idempotency_key=None,
 ) -> AccountTransfer:
     """Внутренний перевод между счетами и кассами (не влияет на P&L)."""
     user = user or created_by or recorded_by
@@ -321,7 +368,7 @@ def transfer_between_accounts(
     if from_account.pk == to_account.pk:
         raise ValidationError('Нельзя выполнить перевод на один и тот же счёт.')
 
-    amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
+    amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма перевода должна быть больше нуля.')
 
@@ -332,8 +379,18 @@ def transfer_between_accounts(
     acc_from = locked[from_account.pk]
     acc_to = locked[to_account.pk]
 
-    if not acc_from.is_active or not acc_to.is_active:
-        raise ValidationError('Один из выбранных счетов деактивирован.')
+    replay = _idempotent_operation(AccountTransfer, idempotency_key, {
+        'from_account_id': acc_from.pk,
+        'to_account_id': acc_to.pk,
+        'amount_kzt': amount,
+        'transfer_date': transfer_date or timezone.localdate(),
+        'notes': notes,
+    })
+    if replay:
+        return replay
+
+    _validate_account(acc_from)
+    _validate_account(acc_to)
 
     if acc_from.current_balance_kzt < amount:
         raise ValidationError(
@@ -356,6 +413,7 @@ def transfer_between_accounts(
         status=PaymentStatus.COMPLETED,
         notes=notes,
         recorded_by=user,
+        idempotency_key=idempotency_key,
     )
 
     AuditLog.objects.create(
@@ -367,7 +425,7 @@ def transfer_between_accounts(
             'transfer_number': trf.transfer_number,
             'from_account': acc_from.name,
             'to_account': acc_to.name,
-            'amount': float(amount),
+            'amount': str(amount),
         },
     )
     return trf
@@ -388,23 +446,40 @@ def record_expense(
     payee: str = '',
     payment_method: str = PaymentMethod.BANK_TRANSFER,
     payment_date=None,
+    idempotency_key=None,
 ) -> Expense:
     """Регистрация операционного расхода предприятия с опциональным списанием с кассы/счёта."""
     user = user or recorded_by
-    amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
+    amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма расхода должна быть строго положительной.')
+    if category not in ExpenseCategory.values:
+        raise ValidationError('Выберите допустимую статью расходов.')
+    if payment_method not in PaymentMethod.values:
+        raise ValidationError('Выберите допустимый способ оплаты.')
+    if not account:
+        raise ValidationError('Для расхода необходимо выбрать денежный счёт.')
 
-    acc = None
-    if account:
-        acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
-        if acc.current_balance_kzt < amount:
-            raise ValidationError(
-                f'Недостаточно средств на счёте «{acc.name}». '
-                f'Остаток: {acc.current_balance_kzt:,.2f} ₸, расход: {amount:,.2f} ₸.'
-            )
-        acc.current_balance_kzt -= amount
-        acc.save(update_fields=['current_balance_kzt', 'updated_at'])
+    acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
+    replay = _idempotent_operation(Expense, idempotency_key, {
+        'category': category,
+        'amount_kzt': amount,
+        'description': description,
+        'account_id': acc.pk if acc else None,
+        'payee': payee,
+        'payment_method': payment_method,
+        'payment_date': payment_date or timezone.localdate(),
+    })
+    if replay:
+        return replay
+    _validate_account(acc)
+    if acc.current_balance_kzt < amount:
+        raise ValidationError(
+            f'Недостаточно средств на счёте «{acc.name}». '
+            f'Остаток: {acc.current_balance_kzt:,.2f} ₸, расход: {amount:,.2f} ₸.'
+        )
+    acc.current_balance_kzt -= amount
+    acc.save(update_fields=['current_balance_kzt', 'updated_at'])
 
     exp = Expense.objects.create(
         expense_number=generate_payment_number('EXP'),
@@ -416,6 +491,7 @@ def record_expense(
         account=acc,
         payment_method=payment_method,
         recorded_by=user,
+        idempotency_key=idempotency_key,
     )
 
     AuditLog.objects.create(
@@ -423,7 +499,7 @@ def record_expense(
         action='RECORD_EXPENSE',
         entity_type='Expense',
         entity_id=str(exp.id),
-        details={'expense_number': exp.expense_number, 'category': category, 'amount': float(amount)},
+        details={'expense_number': exp.expense_number, 'category': category, 'amount': str(amount)},
     )
     return exp
 
@@ -450,7 +526,7 @@ def storno_expense(expense: Expense, user: User, reason: str = '') -> Expense:
         action='STORNO_EXPENSE',
         entity_type='Expense',
         entity_id=str(exp.id),
-        details={'expense_number': exp.expense_number, 'amount': float(exp.amount_kzt), 'reason': reason},
+        details={'expense_number': exp.expense_number,         'amount': str(exp.amount_kzt), 'reason': reason},
     )
     return exp
 
@@ -465,13 +541,30 @@ def record_general_income(
     payer: str = '',
     payment_method: str = PaymentMethod.BANK_TRANSFER,
     income_date=None,
+    idempotency_key=None,
 ) -> GeneralIncome:
     """Регистрация прочего дохода (не привязанного к заказам) с зачислением на счёт."""
-    amount = Decimal(str(amount_kzt)).quantize(Decimal('0.01'))
+    amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
         raise ValidationError('Сумма дохода должна быть больше нуля.')
+    if category not in IncomeCategory.values:
+        raise ValidationError('Выберите допустимую статью доходов.')
+    if payment_method not in PaymentMethod.values:
+        raise ValidationError('Выберите допустимый способ оплаты.')
 
     acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
+    replay = _idempotent_operation(GeneralIncome, idempotency_key, {
+        'category': category,
+        'amount_kzt': amount,
+        'account_id': acc.pk,
+        'description': description,
+        'payer': payer,
+        'payment_method': payment_method,
+        'income_date': income_date or timezone.localdate(),
+    })
+    if replay:
+        return replay
+    _validate_account(acc)
     acc.current_balance_kzt += amount
     acc.save(update_fields=['current_balance_kzt', 'updated_at'])
 
@@ -485,6 +578,7 @@ def record_general_income(
         payment_method=payment_method,
         description=description,
         recorded_by=user,
+        idempotency_key=idempotency_key,
     )
 
     AuditLog.objects.create(
@@ -492,9 +586,69 @@ def record_general_income(
         action='RECORD_GENERAL_INCOME',
         entity_type='GeneralIncome',
         entity_id=str(inc.id),
-        details={'income_number': inc.income_number, 'category': category, 'amount': float(amount)},
+        details={'income_number': inc.income_number, 'category': category, 'amount': str(amount)},
     )
     return inc
+
+
+@transaction.atomic
+def storno_general_income(income: GeneralIncome, user: User, reason: str = '') -> GeneralIncome:
+    inc = GeneralIncome.objects.select_for_update().get(pk=income.pk)
+    if inc.is_storno:
+        raise ValidationError('Доход уже был сторнирован ранее.')
+    acc = FinancialAccount.objects.select_for_update().get(pk=inc.account_id)
+    if acc.current_balance_kzt < inc.amount_kzt:
+        raise ValidationError(
+            f'Невозможно сторнировать доход: на счёте «{acc.name}» недостаточно средств.'
+        )
+    acc.current_balance_kzt -= inc.amount_kzt
+    acc.save(update_fields=['current_balance_kzt', 'updated_at'])
+    inc.is_storno = True
+    if reason:
+        inc.description = f'{inc.description} [Сторно: {reason}]'
+    inc.save(update_fields=['is_storno', 'description'])
+    AuditLog.objects.create(
+        user=user,
+        action='STORNO_GENERAL_INCOME',
+        entity_type='GeneralIncome',
+        entity_id=str(inc.pk),
+        details={'income_number': inc.income_number, 'amount': str(inc.amount_kzt), 'reason': reason},
+    )
+    return inc
+
+
+@transaction.atomic
+def storno_account_transfer(transfer: AccountTransfer, user: User, reason: str = '') -> AccountTransfer:
+    trf = AccountTransfer.objects.select_for_update().get(pk=transfer.pk)
+    if trf.status == PaymentStatus.CANCELLED:
+        raise ValidationError('Перевод уже был сторнирован ранее.')
+    account_ids = sorted([trf.from_account_id, trf.to_account_id])
+    locked = {
+        account.pk: account
+        for account in FinancialAccount.objects.select_for_update().filter(pk__in=account_ids)
+    }
+    source = locked[trf.from_account_id]
+    target = locked[trf.to_account_id]
+    if target.current_balance_kzt < trf.amount_kzt:
+        raise ValidationError(
+            f'Невозможно сторнировать перевод: на счёте «{target.name}» недостаточно средств.'
+        )
+    target.current_balance_kzt -= trf.amount_kzt
+    source.current_balance_kzt += trf.amount_kzt
+    target.save(update_fields=['current_balance_kzt', 'updated_at'])
+    source.save(update_fields=['current_balance_kzt', 'updated_at'])
+    trf.status = PaymentStatus.CANCELLED
+    if reason:
+        trf.notes = f'{trf.notes}\n[Сторно: {reason}]'.strip()
+    trf.save(update_fields=['status', 'notes'])
+    AuditLog.objects.create(
+        user=user,
+        action='STORNO_ACCOUNT_TRANSFER',
+        entity_type='AccountTransfer',
+        entity_id=str(trf.pk),
+        details={'transfer_number': trf.transfer_number, 'amount': str(trf.amount_kzt), 'reason': reason},
+    )
+    return trf
 
 
 # ==============================================================================
@@ -552,7 +706,17 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
     net_cash_flow = cash_inflow - cash_outflow
 
     # 3. Расходы по начислению и Финансовый результат (P&L)
-    net_profit = total_revenue_all - general_expenses
+    production_orders = ProductionOrder.objects.exclude(status='CANCELLED')
+    if date_from:
+        production_orders = production_orders.filter(created_at__date__gte=date_from)
+    if date_to:
+        production_orders = production_orders.filter(created_at__date__lte=date_to)
+    production_costs = sum(
+        (calculate_production_order_actual_cost(order)['total_actual_cost_kzt']
+         for order in production_orders.select_related('product')),
+        Decimal('0.00'),
+    )
+    net_profit = total_revenue_all - general_expenses - production_costs
 
     # 4. Балансы на счетах и в кассе
     accounts = FinancialAccount.objects.filter(is_active=True).order_by('name')
@@ -592,6 +756,24 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
             })
     payables_list.sort(key=lambda x: x['debt'], reverse=True)
 
+    sales_order_profits = []
+    for order in sales_qs.select_related('customer').prefetch_related('items__product'):
+        linked_production = order.production_orders.exclude(status='CANCELLED').select_related('product')
+        linked_costs = [
+            calculate_production_order_actual_cost(production)['total_actual_cost_kzt']
+            for production in linked_production
+        ]
+        cost_basis = 'actual' if linked_costs else 'planned'
+        order_cost = sum(linked_costs, Decimal('0.00')) if linked_costs else order.total_cost_kzt
+        sales_order_profits.append({
+            'order': order,
+            'revenue': order.total_amount_kzt,
+            'cost': order_cost,
+            'profit': order.total_amount_kzt - order_cost,
+            'cost_basis': cost_basis,
+        })
+    sales_order_profits.sort(key=lambda row: row['profit'], reverse=True)
+
     # 7. Структура расходов по категориям
     expense_structure = []
     for cat in ExpenseCategory:
@@ -620,6 +802,9 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
         'purchases_total_kzt': supplier_cash_paid,
         'net_profit': net_profit,
         'net_profit_kzt': net_profit,
+        'production_costs': production_costs,
+        'production_costs_kzt': production_costs,
+        'sales_order_profits': sales_order_profits[:10],
         'cash_inflow': cash_inflow,
         'cash_inflow_kzt': cash_inflow,
         'cash_outflow': cash_outflow,
@@ -653,34 +838,38 @@ def calculate_production_order_actual_cost(order) -> dict:
 
     # Анализируем складские движения отпуска сырья под заказ
     movements = StockMovement.objects.filter(
-        movement_type=MovementType.ISSUE,
+        movement_type__in=[MovementType.ISSUE, MovementType.PRODUCTION_RETURN],
         document__production_order=order,
+        document__status='POSTED',
     ).select_related('material')
 
-    for m in movements:
-        cost = (m.quantity * m.unit_cost_kzt).quantize(Decimal('0.01'))
+    has_posted_material_movements = movements.exists()
+    for movement in movements:
+        movement_cost = movement.total_cost_kzt
+        if movement_cost == Decimal('0.00'):
+            movement_cost = (movement.quantity * movement.unit_cost_kzt).quantize(Decimal('0.01'))
+        cost = -movement_cost if movement.movement_type == MovementType.PRODUCTION_RETURN else movement_cost
         actual_materials_cost += cost
         actual_materials_items.append({
-            'material': m.material,
-            'quantity': m.quantity,
-            'unit': m.unit,
-            'unit_cost': m.unit_cost_kzt,
+            'material': movement.material,
+            'quantity': movement.quantity,
+            'unit': movement.unit,
+            'unit_cost': movement.unit_cost_kzt,
             'total_cost': cost,
+            'movement_type': movement.movement_type,
         })
 
-    # Если списаний через движения нет, берем материальные списания заказа
-    if actual_materials_cost == Decimal('0.00'):
+    if not has_posted_material_movements:
         actual_materials_cost = order.actual_materials_cost_kzt
 
-    # 2. ФОТ и трудочасы
+    # 2. ФОТ и накладные расходы из существующих производственных данных
     actual_labor_cost = order.actual_labor_cost_kzt
     overhead_cost = order.overhead_cost_kzt
 
-    # 3. Брак и потери
+    # 3. Брак и потери уже входят в стоимость выданного материала; показываем их отдельно.
     waste_cost = sum((w.cost_kzt for w in order.wastes.all()), Decimal('0.00'))
 
-    # Итого
-    actual_total_cost = actual_materials_cost + actual_labor_cost + overhead_cost + waste_cost
+    actual_total_cost = actual_materials_cost + actual_labor_cost + overhead_cost
     qty_produced = order.quantity_produced if order.quantity_produced > Decimal('0.00') else order.quantity_planned
     unit_cost = (actual_total_cost / qty_produced).quantize(Decimal('0.01')) if qty_produced > Decimal('0.00') else Decimal('0.00')
 

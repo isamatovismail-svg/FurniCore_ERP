@@ -22,11 +22,17 @@ urlpatterns = [
     # Казначейство: Счета и кассы
     path('accounts/', views.account_list, name='accounts'),
     path('accounts/transfer/', views.account_transfer, name='account_transfer'),
+    path('accounts/transfers/<uuid:pk>/storno/', views.account_transfer_storno, name='account_transfer_storno'),
 
     # Операционные расходы
     path('expenses/', views.expense_list, name='expenses'),
     path('expenses/create/', views.expense_create, name='expense_create'),
     path('expenses/<uuid:pk>/storno/', views.expense_storno, name='expense_storno'),
+
+    # Прочие доходы
+    path('income/', views.income_list, name='incomes'),
+    path('income/create/', views.income_create, name='income_create'),
+    path('income/<uuid:pk>/storno/', views.income_storno, name='income_storno'),
 
     # Задолженности
     path('receivables/', views.receivables_list, name='receivables'),
@@ -37,4 +43,5 @@ urlpatterns = [
 
     # Экспорт отчётов в Excel
     path('export/excel/', views.export_excel, name='export_excel'),
+    path('export/pdf/', views.export_pdf, name='export_pdf'),
 ]

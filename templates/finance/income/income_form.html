@@ -1,0 +1,49 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Регистрация дохода | FurniCore ERP{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-5">
+  <div>
+    <a href="{% url 'finance:incomes' %}" class="text-xs text-gray-500 hover:underline">Прочие доходы</a>
+    <h1 class="mt-1 text-2xl font-bold" style="color:#173B35;">Регистрация дохода</h1>
+  </div>
+  <form method="post" class="space-y-4 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+    {% csrf_token %}
+    <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+    <label class="block text-sm font-medium">Категория
+      <select name="category" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+        {% for value, label in categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="block text-sm font-medium">Сумма, ₸
+      <input type="number" name="amount_kzt" min="0.01" step="0.01" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+    </label>
+    <label class="block text-sm font-medium">Назначение
+      <input name="description" maxlength="255" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+    </label>
+    <label class="block text-sm font-medium">Плательщик
+      <input name="payer" maxlength="200" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+    </label>
+    <label class="block text-sm font-medium">Счёт зачисления
+      <select name="account_id" required class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+        {% for account in accounts %}<option value="{{ account.pk }}">{{ account.name }} — {{ account.balance_kzt|floatformat:2 }} ₸</option>{% endfor %}
+      </select>
+    </label>
+    <div class="grid gap-4 md:grid-cols-2">
+      <label class="block text-sm font-medium">Дата
+        <input type="date" name="income_date" value="{{ today|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+      </label>
+      <label class="block text-sm font-medium">Способ оплаты
+        <select name="payment_method" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2">
+          {% for value, label in payment_methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="flex justify-end gap-3 border-t pt-4">
+      <a href="{% url 'finance:incomes' %}" class="rounded-lg border px-4 py-2 text-sm">Отмена</a>
+      <button class="rounded-lg px-4 py-2 text-sm font-semibold text-white" style="background:#173B35;">Провести доход</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -80,6 +80,7 @@ class CustomerPayment(models.Model):
     """Поступление оплаты от клиента по заказу покупателя."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     payment_number = models.CharField(max_length=50, unique=True, verbose_name='Номер квитанции')
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     sales_order = models.ForeignKey(
         'sales.SalesOrder',
         on_delete=models.PROTECT,
@@ -150,6 +151,7 @@ class SupplierPayment(models.Model):
     """Выплата поставщику сырья / фурнитуры по заказу на закупку."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     payment_number = models.CharField(max_length=50, unique=True, verbose_name='Номер платёжки')
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     purchase_order = models.ForeignKey(
         'suppliers.PurchaseOrder',
         on_delete=models.PROTECT,
@@ -221,6 +223,7 @@ class AccountTransfer(models.Model):
     """Внутренний перевод денежных средств между счетами и кассами фабрики."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     transfer_number = models.CharField(max_length=50, unique=True, verbose_name='Номер перевода')
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     from_account = models.ForeignKey(
         FinancialAccount,
         on_delete=models.PROTECT,
@@ -287,6 +290,7 @@ class Expense(models.Model):
     """Учёт операционных расходов фабрики."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     expense_number = models.CharField(max_length=50, blank=True, verbose_name='Номер расхода')
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     category = models.CharField(
         max_length=50,
         choices=ExpenseCategory.choices,
@@ -345,6 +349,7 @@ class GeneralIncome(models.Model):
     """Учёт прочих операционных доходов (не привязанных к конкретному заказу покупателя)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     income_number = models.CharField(max_length=50, unique=True, verbose_name='Номер документа')
+    idempotency_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     category = models.CharField(
         max_length=50,
         choices=IncomeCategory.choices,

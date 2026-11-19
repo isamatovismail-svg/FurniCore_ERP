@@ -1,10 +1,10 @@
 import io
 import os
+from html import escape
 from decimal import Decimal
 from django.utils import timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
@@ -13,29 +13,33 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-# Register Cyrillic-compatible fonts
 FONT_REGULAR = 'Helvetica'
 FONT_BOLD = 'Helvetica-Bold'
-try:
-    font_paths = [
-        ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
-        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
-    ]
-    for reg_path, bold_path in font_paths:
-        if os.path.exists(reg_path) and os.path.exists(bold_path):
-            pdfmetrics.registerFont(TTFont('CyrillicFont', reg_path))
-            pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', bold_path))
-            FONT_REGULAR = 'CyrillicFont'
-            FONT_BOLD = 'CyrillicFont-Bold'
-            break
-except Exception:
-    pass
+font_paths = [
+    ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
+    ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+]
+for reg_path, bold_path in font_paths:
+    if os.path.exists(reg_path) and os.path.exists(bold_path):
+        pdfmetrics.registerFont(TTFont('CyrillicFont', reg_path))
+        pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', bold_path))
+        FONT_REGULAR = 'CyrillicFont'
+        FONT_BOLD = 'CyrillicFont-Bold'
+        break
+
+
+def _require_cyrillic_pdf_font():
+    if FONT_REGULAR == 'Helvetica':
+        raise RuntimeError(
+            'Для формирования PDF с кириллицей установите Liberation Sans или DejaVu Sans.'
+        )
 
 
 def generate_customer_payment_pdf(payment) -> bytes:
     """
     Generates a PDF payment receipt for a CustomerPayment.
     """
+    _require_cyrillic_pdf_font()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -172,6 +176,7 @@ def generate_supplier_payment_pdf(payment) -> bytes:
     """
     Generates a PDF payment order for a SupplierPayment.
     """
+    _require_cyrillic_pdf_font()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -301,6 +306,74 @@ def generate_supplier_payment_pdf(payment) -> bytes:
     return pdf
 
 
+def generate_financial_report_pdf(kpis: dict, start_date=None, end_date=None) -> bytes:
+    _require_cyrillic_pdf_font()
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(
+        'FinanceReportTitle', parent=styles['Heading1'], fontName=FONT_BOLD,
+        fontSize=16, leading=20, textColor=colors.HexColor('#173B35'),
+    )
+    normal = ParagraphStyle(
+        'FinanceReportBody', parent=styles['Normal'], fontName=FONT_REGULAR,
+        fontSize=9, leading=12,
+    )
+    header = ParagraphStyle(
+        'FinanceReportHeader', parent=normal, fontName=FONT_BOLD, textColor=colors.white,
+    )
+    period = 'Всё время'
+    if start_date or end_date:
+        period = f'{start_date.strftime("%d.%m.%Y") if start_date else "—"} – {end_date.strftime("%d.%m.%Y") if end_date else "—"}'
+
+    rows = [
+        ('Выручка по продажам', kpis['accrual_revenue_kzt']),
+        ('Прочие доходы', kpis['other_income_kzt']),
+        ('Поступления от покупателей и прочие доходы', kpis['cash_inflow_kzt']),
+        ('Выплаты поставщикам', kpis['purchases_total_kzt']),
+        ('Операционные расходы', kpis['cash_expenses_kzt']),
+        ('Себестоимость производства', kpis['production_costs_kzt']),
+        ('Операционная прибыль (оценка)', kpis['net_profit_kzt']),
+        ('Денежный остаток', kpis['total_account_balance_kzt']),
+        ('Дебиторская задолженность', kpis['total_receivables_kzt']),
+        ('Кредиторская задолженность', kpis['total_payables_kzt']),
+    ]
+    table_data = [
+        [Paragraph('Показатель', header), Paragraph('Сумма, KZT', header)],
+        *[
+            [Paragraph(escape(label), normal), Paragraph(f'{amount:,.2f}'.replace(',', ' '), normal)]
+            for label, amount in rows
+        ],
+    ]
+    table = Table(table_data, colWidths=[340, 160], repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#173B35')),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D6DED9')),
+        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('PADDING', (0, 0), (-1, -1), 7),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+    ]))
+    story = [
+        Paragraph('FurniCore ERP — финансовый отчёт', title),
+        Paragraph(f'Период: {period} | Сформирован: {timezone.localtime().strftime("%d.%m.%Y %H:%M")}', normal),
+        Spacer(1, 16),
+        table,
+        Spacer(1, 10),
+        Paragraph(
+            'Примечание: прибыль рассчитана по текущим производственным данным и зарегистрированным расходам; '
+            'она является управленческой оценкой.',
+            normal,
+        ),
+    ]
+    document.build(story)
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
+
+
 # -------------------------------------------------------------
 # Excel Reports Generator using openpyxl
 # -------------------------------------------------------------
@@ -314,10 +387,10 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
     - 'payables': Кредиторская задолженность (поставщики)
     - 'costing': Себестоимость заказов и мебели
     """
-    from apps.finance.models import CustomerPayment, SupplierPayment, Expense, ExpenseCategory, FinancialAccount
-    from apps.sales.models import SalesOrder, Customer
-    from apps.suppliers.models import PurchaseOrder, Supplier
+    from apps.sales.models import SalesOrder
+    from apps.suppliers.models import PurchaseOrder
     from apps.production.models import ProductionOrder
+    from apps.finance.models import CustomerPayment, SupplierPayment, Expense, GeneralIncome
     from apps.finance.services import get_financial_dashboard_kpis, calculate_production_order_actual_cost
 
     wb = openpyxl.Workbook()
@@ -354,8 +427,9 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             ("Фактические поступления денег", float(kpis['cash_inflow_kzt']), "Оплаты от клиентов (ДДС)"),
             ("Расходы на закупки сырья", float(kpis['purchases_total_kzt']), "Оплачено поставщикам сырья и фурнитуры"),
             ("Операционные расходы фабрики", float(kpis['cash_expenses_kzt']), "Аренда, зарплата, логистика и т.д."),
+            ("Себестоимость производства", float(kpis['production_costs_kzt']), "Расчёт по производственным данным"),
             ("Общие подтверждённые затраты", float(kpis['cash_outflow_kzt']), "Всего выплачено средств"),
-            ("Чистая операционная прибыль (P&L)", float(kpis['net_profit_kzt']), "Выручка минус расходы"),
+            ("Чистая операционная прибыль (оценка)", float(kpis['net_profit_kzt']), "Выручка минус зарегистрированные расходы и себестоимость"),
         ]
         for r in rows:
             ws.append(list(r))
@@ -398,6 +472,10 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append(headers)
 
         active_orders = SalesOrder.objects.exclude(status='CANCELLED').select_related('customer').order_by('-created_at')
+        if start_date:
+            active_orders = active_orders.filter(created_at__date__gte=start_date)
+        if end_date:
+            active_orders = active_orders.filter(created_at__date__lte=end_date)
         orders = [o for o in active_orders if o.remaining_debt_kzt > Decimal('0.00')]
         for o in orders:
             ws.append([
@@ -421,6 +499,10 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append(headers)
 
         active_pos = PurchaseOrder.objects.exclude(status='CANCELLED').select_related('supplier').order_by('-order_date')
+        if start_date:
+            active_pos = active_pos.filter(order_date__gte=start_date)
+        if end_date:
+            active_pos = active_pos.filter(order_date__lte=end_date)
         pos = [p for p in active_pos if p.remaining_debt_kzt > Decimal('0.00')]
         for p in pos:
             ws.append([
@@ -447,7 +529,12 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ]
         ws.append(headers)
 
-        p_orders = ProductionOrder.objects.select_related('product').all().order_by('-created_at')[:50]
+        p_orders = ProductionOrder.objects.select_related('product').all().order_by('-created_at')
+        if start_date:
+            p_orders = p_orders.filter(created_at__date__gte=start_date)
+        if end_date:
+            p_orders = p_orders.filter(created_at__date__lte=end_date)
+        p_orders = p_orders[:500]
         for po in p_orders:
             cost_info = calculate_production_order_actual_cost(po)
             ws.append([
@@ -462,6 +549,93 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
                 float(cost_info['actual_unit_cost_kzt']),
                 float(cost_info['cost_variance_kzt']),
             ])
+
+    elif report_type == 'payments':
+        ws.title = "Платежи"
+        ws.append(["FurniCore ERP — Реестр финансовых платежей"])
+        ws.append([f"Сформирован: {now_str}"])
+        ws.append([])
+        ws.append(["Тип операции", "Номер", "Дата", "Контрагент", "Заказ", "Сумма (KZT)", "Счёт", "Статус"])
+        customer_payments = CustomerPayment.objects.select_related(
+            'customer', 'sales_order', 'account'
+        ).order_by('payment_date', 'created_at')
+        supplier_payments = SupplierPayment.objects.select_related(
+            'supplier', 'purchase_order', 'account'
+        ).order_by('payment_date', 'created_at')
+        if start_date:
+            customer_payments = customer_payments.filter(payment_date__gte=start_date)
+            supplier_payments = supplier_payments.filter(payment_date__gte=start_date)
+        if end_date:
+            customer_payments = customer_payments.filter(payment_date__lte=end_date)
+            supplier_payments = supplier_payments.filter(payment_date__lte=end_date)
+        for payment in customer_payments:
+            ws.append([
+                "Поступление от покупателя", payment.payment_number, payment.payment_date,
+                payment.customer.name, payment.sales_order.order_number, float(payment.amount_kzt),
+                payment.account.name, payment.get_status_display(),
+            ])
+        for payment in supplier_payments:
+            ws.append([
+                "Выплата поставщику", payment.payment_number, payment.payment_date,
+                payment.supplier.name, payment.purchase_order.order_number if payment.purchase_order else "",
+                float(payment.amount_kzt), payment.account.name, payment.get_status_display(),
+            ])
+
+    elif report_type == 'income_expenses':
+        ws.title = "Доходы и расходы"
+        ws.append(["FurniCore ERP — Доходы и расходы"])
+        ws.append([f"Сформирован: {now_str}"])
+        ws.append([])
+        ws.append(["Тип", "Номер", "Дата", "Категория", "Контрагент / Назначение", "Сумма (KZT)", "Счёт", "Статус"])
+        incomes = GeneralIncome.objects.select_related('account').order_by('income_date')
+        expenses = Expense.objects.select_related('account').order_by('payment_date')
+        if start_date:
+            incomes = incomes.filter(income_date__gte=start_date)
+            expenses = expenses.filter(payment_date__gte=start_date)
+        if end_date:
+            incomes = incomes.filter(income_date__lte=end_date)
+            expenses = expenses.filter(payment_date__lte=end_date)
+        for income in incomes:
+            ws.append([
+                "Доход", income.income_number, income.income_date, income.get_category_display(),
+                income.payer or income.description, float(income.amount_kzt),
+                income.account.name, "Сторнирован" if income.is_storno else "Проведён",
+            ])
+        for expense in expenses:
+            ws.append([
+                "Расход", expense.expense_number, expense.payment_date, expense.get_category_display(),
+                expense.payee or expense.description, float(expense.amount_kzt),
+                expense.account.name if expense.account else "", "Сторнирован" if expense.is_storno else "Проведён",
+            ])
+
+    elif report_type == 'profitability':
+        ws.title = "Прибыль по заказам"
+        ws.append(["FurniCore ERP — Прибыльность заказов покупателей"])
+        ws.append([f"Сформирован: {now_str}"])
+        ws.append([])
+        ws.append(["Заказ", "Клиент", "Дата", "Выручка (KZT)", "Себестоимость (KZT)", "Прибыль (KZT)", "Основа затрат"])
+        orders = SalesOrder.objects.exclude(status__in=['DRAFT', 'CANCELLED']).select_related(
+            'customer'
+        ).prefetch_related('items__product').order_by('-created_at')
+        if start_date:
+            orders = orders.filter(created_at__date__gte=start_date)
+        if end_date:
+            orders = orders.filter(created_at__date__lte=end_date)
+        for order in orders:
+            production_orders = order.production_orders.exclude(status='CANCELLED').select_related('product')
+            actual_costs = [
+                calculate_production_order_actual_cost(production)['total_actual_cost_kzt']
+                for production in production_orders
+            ]
+            cost = sum(actual_costs, Decimal('0.00')) if actual_costs else order.total_cost_kzt
+            basis = "Факт производства" if actual_costs else "Плановая себестоимость изделия"
+            ws.append([
+                order.order_number, order.customer.name, order.created_at.date(),
+                float(order.total_amount_kzt), float(cost), float(order.total_amount_kzt - cost), basis,
+            ])
+
+    else:
+        raise ValueError(f'Unsupported financial report type: {report_type}')
 
     # Styling sheet
     ws['A1'].font = title_font

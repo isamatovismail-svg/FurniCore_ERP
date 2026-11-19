@@ -1,5 +1,4 @@
 import logging
-from django.utils import timezone
 from apps.accounts.models import User, UserRole
 from apps.notifications.models import Notification, NotificationType
 

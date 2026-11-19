@@ -1,18 +1,5 @@
 from django import forms
-from decimal import Decimal
-from apps.warehouses.models import (
-    Warehouse,
-    WarehouseType,
-    WarehouseDocument,
-    WarehouseDocumentItem,
-    WarehouseDocumentType,
-    DocumentStatus,
-)
-from apps.materials.models import Material
-from apps.products.models import Product
-from apps.suppliers.models import Supplier
-from apps.sales.models import Customer, SalesOrder
-from apps.production.models import ProductionOrder
+from apps.warehouses.models import WarehouseDocument
 
 
 class WarehouseDocumentForm(forms.ModelForm):

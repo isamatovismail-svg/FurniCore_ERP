@@ -1,8 +1,6 @@
 import io
 import os
 import qrcode
-from decimal import Decimal
-from django.utils import timezone
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm

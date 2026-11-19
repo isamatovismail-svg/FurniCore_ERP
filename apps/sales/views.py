@@ -3,12 +3,12 @@ from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.db.models import Sum, Q, Count
 from apps.accounts.models import UserRole
 from apps.accounts.decorators import deny_demo_viewer
 from apps.products.models import Product
-from apps.sales.models import SalesOrder, OrderStatus, Customer, SalesOrderItem
+from apps.sales.models import SalesOrder, OrderStatus, Customer
 from apps.sales.services import (
     create_sales_order,
     check_sales_order_stock,

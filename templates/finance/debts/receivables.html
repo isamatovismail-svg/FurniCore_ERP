@@ -58,13 +58,15 @@
 
   <!-- Search -->
   <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-    <form method="get" class="flex gap-3">
+    <form method="get" class="flex flex-col gap-3 md:flex-row">
       <input type="text" name="q" value="{{ q }}" placeholder="Поиск по номеру заказа, клиенту или телефону..."
              class="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs outline-none bg-white">
+      <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="px-3 py-2 rounded-lg border border-gray-200 text-xs" aria-label="Дата заказа от">
+      <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="px-3 py-2 rounded-lg border border-gray-200 text-xs" aria-label="Дата заказа до">
       <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-sm" style="background:#173B35;">
         Найти
       </button>
-      {% if q %}
+      {% if q or start_date or end_date %}
       <a href="{% url 'finance:receivables' %}" class="px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
         Сбросить
       </a>

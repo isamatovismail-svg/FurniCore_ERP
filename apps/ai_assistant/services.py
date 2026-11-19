@@ -13,7 +13,6 @@ import urllib.request
 from decimal import Decimal
 from typing import Tuple, Dict, Any
 
-from django.conf import settings
 from django.db.models import Sum
 
 logger = logging.getLogger(__name__)

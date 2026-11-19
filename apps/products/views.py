@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.db.models import Q
 from apps.accounts.models import UserRole
 from apps.accounts.decorators import deny_demo_viewer
-from apps.products.models import Product, ProductCategory, ProductVariant
+from apps.products.models import Product, ProductCategory
 from apps.warehouses.models import StockBalance, Warehouse, WarehouseType
 
 
