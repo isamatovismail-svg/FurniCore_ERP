@@ -271,6 +271,7 @@ class AccountTransfer(models.Model):
 
 
 class ExpenseCategory(models.TextChoices):
+    OFFICE      = 'OFFICE',      _('Канцелярия и офисные расходы')
     MATERIALS   = 'MATERIALS',   _('Закупка сырья и комплектующих')
     ELECTRICITY = 'ELECTRICITY', _('Электроэнергия')
     GAS         = 'GAS',         _('Отопление и газ')
@@ -395,3 +396,79 @@ class GeneralIncome(models.Model):
 
     def __str__(self):
         return f'{self.get_category_display()}: {self.amount_kzt:,.2f} ₸ ({self.income_date})'
+
+
+class CustomerReturnStatus(models.TextChoices):
+    POSTED = 'POSTED', _('Проведён')
+    CANCELLED = 'CANCELLED', _('Сторнирован')
+
+
+class CustomerReturn(models.Model):
+    """Возврат покупателя, связанный с исходной отгрузкой и финансовым возвратом."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    return_number = models.CharField(max_length=50, unique=True, verbose_name='Номер возврата')
+    idempotency_key = models.UUIDField(unique=True, editable=False)
+    sales_order = models.ForeignKey(
+        'sales.SalesOrder', on_delete=models.PROTECT, related_name='customer_returns',
+        verbose_name='Заказ покупателя',
+    )
+    shipment = models.ForeignKey(
+        'warehouses.WarehouseDocument', on_delete=models.PROTECT, related_name='finance_returns',
+        verbose_name='Исходная отгрузка',
+    )
+    warehouse_document = models.OneToOneField(
+        'warehouses.WarehouseDocument', on_delete=models.PROTECT, related_name='finance_customer_return',
+        verbose_name='Складской документ возврата',
+    )
+    customer = models.ForeignKey(
+        'sales.Customer', on_delete=models.PROTECT, related_name='finance_returns',
+        verbose_name='Покупатель',
+    )
+    account = models.ForeignKey(
+        FinancialAccount, on_delete=models.PROTECT, related_name='customer_refunds',
+        verbose_name='Счёт возврата',
+    )
+    refund_amount_kzt = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Сумма возврата (KZT)')
+    status = models.CharField(
+        max_length=20, choices=CustomerReturnStatus.choices,
+        default=CustomerReturnStatus.POSTED, verbose_name='Статус',
+    )
+    reason = models.TextField(blank=True, verbose_name='Причина возврата')
+    recorded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recorded_customer_returns', verbose_name='Ответственный',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    posted_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Возврат покупателя'
+        verbose_name_plural = 'Возвраты покупателей'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.return_number} — {self.refund_amount_kzt:,.2f} ₸'
+
+
+class CustomerReturnItem(models.Model):
+    customer_return = models.ForeignKey(
+        CustomerReturn, on_delete=models.PROTECT, related_name='items',
+        verbose_name='Документ возврата',
+    )
+    shipment_item = models.ForeignKey(
+        'warehouses.WarehouseDocumentItem', on_delete=models.PROTECT,
+        related_name='customer_return_items', verbose_name='Строка исходной отгрузки',
+    )
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, verbose_name='Количество возврата')
+    refund_amount_kzt = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Возврат покупателю (KZT)')
+    cogs_amount_kzt = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Возврат себестоимости (KZT)')
+
+    class Meta:
+        verbose_name = 'Строка возврата покупателя'
+        verbose_name_plural = 'Строки возврата покупателя'
+        constraints = [
+            models.UniqueConstraint(
+                fields=('customer_return', 'shipment_item'),
+                name='uniq_customer_return_shipment_item',
+            ),
+        ]

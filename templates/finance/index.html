@@ -85,6 +85,7 @@
     <a href="{% url 'finance:receivables' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Дебиторка</a>
     <a href="{% url 'finance:payables' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Кредиторка</a>
     <a href="{% url 'finance:order_costs' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Себестоимость</a>
+    <a href="{% url 'finance:customer_returns' %}" class="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100">Возвраты</a>
   </div>
 
   <!-- Period Filter -->
@@ -160,7 +161,7 @@
         {{ kpis.cash_outflow_kzt|floatformat:0|intcomma }} ₸
       </div>
       <div class="text-[11px] text-gray-400 mt-1">
-        Поставщики: {{ kpis.purchases_total_kzt|floatformat:0|intcomma }} ₸ | Расходы: {{ kpis.cash_expenses_kzt|floatformat:0|intcomma }} ₸
+        Поставщики: {{ kpis.purchases_total_kzt|floatformat:0|intcomma }} ₸ | Оплаченные расходы: {{ kpis.cash_expenses_paid_kzt|floatformat:0|intcomma }} ₸
       </div>
     </div>
 

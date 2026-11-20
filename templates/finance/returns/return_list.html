@@ -1,0 +1,38 @@
+{% extends "layouts/base.html" %}
+{% load humanize %}
+{% block title %}Возвраты покупателей | FurniCore ERP{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold" style="color:#173B35;">Возвраты покупателей</h1>
+    {% if can_manage %}<a href="{% url 'finance:customer_return_create' %}" class="px-4 py-2 rounded-lg text-white text-xs" style="background:#173B35;">Оформить возврат</a>{% endif %}
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 overflow-x-auto">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 text-gray-500"><tr>
+        <th class="px-4 py-3 text-left">Номер</th><th class="px-4 py-3">Заказ / отгрузка</th>
+        <th class="px-4 py-3 text-right">Сумма</th><th class="px-4 py-3">Статус</th><th class="px-4 py-3"></th>
+      </tr></thead>
+      <tbody>
+      {% for ret in returns %}
+      <tr class="border-t border-gray-100">
+        <td class="px-4 py-3 font-bold">{{ ret.return_number }}</td>
+        <td class="px-4 py-3">{{ ret.sales_order.order_number }} / {{ ret.shipment.doc_number }}</td>
+        <td class="px-4 py-3 text-right font-bold">{{ ret.refund_amount_kzt|floatformat:2|intcomma }} ₸</td>
+        <td class="px-4 py-3 text-center">{{ ret.get_status_display }}</td>
+        <td class="px-4 py-3 text-right">
+          {% if can_manage and ret.status == 'POSTED' %}
+          <form method="post" action="{% url 'finance:customer_return_storno' ret.pk %}">
+            {% csrf_token %}<button class="text-red-700">Сторно</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400">Возвратов нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -71,6 +71,9 @@ class SalesOrder(models.Model):
         max_digits=16, decimal_places=2, default=Decimal('0.00'),
         verbose_name='Предоплата (KZT)',
     )
+    payment_due_date = models.DateField(
+        null=True, blank=True, verbose_name='Срок оплаты',
+    )
     planned_delivery_date = models.DateField(null=True, blank=True, verbose_name='Плановая дата доставки')
     delivery_address = models.CharField(max_length=255, blank=True, verbose_name='Адрес доставки')
     notes = models.TextField(blank=True, verbose_name='Комментарии')

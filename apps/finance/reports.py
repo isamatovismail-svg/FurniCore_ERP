@@ -391,7 +391,12 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
     from apps.suppliers.models import PurchaseOrder
     from apps.production.models import ProductionOrder
     from apps.finance.models import CustomerPayment, SupplierPayment, Expense, GeneralIncome
-    from apps.finance.services import get_financial_dashboard_kpis, calculate_production_order_actual_cost
+    from apps.finance.services import (
+        get_financial_dashboard_kpis,
+        calculate_production_order_actual_cost,
+        debt_aging,
+        sales_order_gross_profit,
+    )
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -423,13 +428,13 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append(headers)
 
         rows = [
-            ("Выручка от продаж (Метод начисления)", float(kpis['accrual_revenue_kzt']), "По подтверждённым и отгруженным заказам"),
-            ("Фактические поступления денег", float(kpis['cash_inflow_kzt']), "Оплаты от клиентов (ДДС)"),
-            ("Расходы на закупки сырья", float(kpis['purchases_total_kzt']), "Оплачено поставщикам сырья и фурнитуры"),
-            ("Операционные расходы фабрики", float(kpis['cash_expenses_kzt']), "Аренда, зарплата, логистика и т.д."),
-            ("Себестоимость производства", float(kpis['production_costs_kzt']), "Расчёт по производственным данным"),
-            ("Общие подтверждённые затраты", float(kpis['cash_outflow_kzt']), "Всего выплачено средств"),
-            ("Чистая операционная прибыль (оценка)", float(kpis['net_profit_kzt']), "Выручка минус зарегистрированные расходы и себестоимость"),
+            ("Выручка от продаж (Метод начисления)", kpis['accrual_revenue_kzt'], "По подтверждённым и отгруженным заказам"),
+            ("Фактические поступления денег", kpis['cash_inflow_kzt'], "Оплаты от клиентов (ДДС)"),
+            ("Расходы на закупки сырья", kpis['purchases_total_kzt'], "Оплачено поставщикам сырья и фурнитуры"),
+            ("Операционные расходы фабрики", kpis['cash_expenses_kzt'], "Аренда, зарплата, логистика и т.д."),
+            ("Себестоимость производства", kpis['production_costs_kzt'], "Расчёт по производственным данным"),
+            ("Общие подтверждённые затраты", kpis['cash_outflow_kzt'], "Всего выплачено средств"),
+            ("Чистая операционная прибыль (оценка)", kpis['net_profit_kzt'], "Выручка минус зарегистрированные расходы и себестоимость"),
         ]
         for r in rows:
             ws.append(list(r))
@@ -437,7 +442,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([])
         ws.append(["Детализация расходов по статьям:"])
         for cat in kpis['expenses_breakdown']:
-            ws.append([str(cat['label']), float(cat['total']), f"{cat['percent']}% от общих расходов"])
+            ws.append([str(cat['label']), cat['total'], f"{cat['percent']}% от общих расходов"])
 
     elif report_type == 'cashflow':
         ws.title = "Отчёт ДДС"
@@ -448,17 +453,17 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([])
 
         ws.append(["Показатель ДДС", "Сумма (KZT)", "Комментарий"])
-        ws.append(["Поступления (Cash Inflow)", float(kpis['cash_inflow_kzt']), "Платежи клиентов и прочие доходы"])
-        ws.append(["Выплаты поставщикам", float(kpis['purchases_total_kzt']), "Оплата счетов за материалы"])
-        ws.append(["Операционные выплаты", float(kpis['cash_expenses_kzt']), "ФОТ, аренда, налоги, логистика"])
-        ws.append(["Всего выплат (Cash Outflow)", float(kpis['cash_outflow_kzt']), "Суммарный отток средств"])
-        ws.append(["Чистый денежный поток (Net Cash Flow)", float(kpis['net_cash_flow_kzt']), "Поступления минус выплаты"])
+        ws.append(["Поступления (Cash Inflow)", kpis['cash_inflow_kzt'], "Платежи клиентов и прочие доходы"])
+        ws.append(["Выплаты поставщикам", kpis['purchases_total_kzt'], "Оплата счетов за материалы"])
+        ws.append(["Операционные выплаты", kpis['cash_expenses_paid_kzt'], "Фактически оплаченные расходы"])
+        ws.append(["Всего выплат (Cash Outflow)", kpis['cash_outflow_kzt'], "Суммарный отток средств"])
+        ws.append(["Чистый денежный поток (Net Cash Flow)", kpis['net_cash_flow_kzt'], "Поступления минус выплаты"])
 
         ws.append([])
         ws.append(["Остатки на счетах и в кассах:"])
         for acc in kpis['accounts']:
             name = acc.name if hasattr(acc, 'name') else acc.get('name', '—')
-            bal = float(acc.current_balance_kzt) if hasattr(acc, 'current_balance_kzt') else float(acc.get('balance_kzt', 0.0))
+            bal = acc.current_balance_kzt if hasattr(acc, 'current_balance_kzt') else Decimal(str(acc.get('balance_kzt', '0.00')))
             t_label = acc.type_label if hasattr(acc, 'type_label') else acc.get('type_label', '')
             ws.append([name, bal, str(t_label)])
 
@@ -468,7 +473,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([f"Сформирован: {now_str}"])
         ws.append([])
 
-        headers = ["Клиент", "Телефон", "Номер заказа", "Дата заказа", "Сумма заказа (₸)", "Оплачено (₸)", "Долг (₸)", "Статус оплаты"]
+        headers = ["Клиент", "Телефон", "Номер заказа", "Дата заказа", "Срок оплаты", "Просрочено дней", "Сумма заказа (₸)", "Оплачено (₸)", "Долг (₸)", "Статус оплаты", "Категория"]
         ws.append(headers)
 
         active_orders = SalesOrder.objects.exclude(status='CANCELLED').select_related('customer').order_by('-created_at')
@@ -478,15 +483,19 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             active_orders = active_orders.filter(created_at__date__lte=end_date)
         orders = [o for o in active_orders if o.remaining_debt_kzt > Decimal('0.00')]
         for o in orders:
+            aging = debt_aging(o)
             ws.append([
                 o.customer.name if o.customer else "—",
                 o.customer.phone if o.customer else "—",
                 o.order_number,
                 o.created_at.strftime("%d.%m.%Y"),
-                float(o.total_amount_kzt),
-                float(o.paid_amount_kzt),
-                float(o.remaining_debt_kzt),
-                str(getattr(o, 'payment_status_display', o.payment_status))
+                aging['due_date'].strftime("%d.%m.%Y") if aging['due_date'] else "",
+                aging['overdue_days'],
+                o.total_amount_kzt,
+                o.paid_amount_kzt,
+                o.remaining_debt_kzt,
+                str(getattr(o, 'payment_status_display', o.payment_status)),
+                aging['bucket'],
             ])
 
     elif report_type == 'payables':
@@ -495,7 +504,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         ws.append([f"Сформирован: {now_str}"])
         ws.append([])
 
-        headers = ["Поставщик", "Контакты", "Заказ закупки", "Дата", "Сумма закупки (₸)", "Выплачено (₸)", "Долг фабрики (₸)", "Статус"]
+        headers = ["Поставщик", "Контакты", "Заказ закупки", "Дата", "Срок оплаты", "Просрочено дней", "Сумма закупки (₸)", "Выплачено (₸)", "Долг фабрики (₸)", "Статус", "Категория"]
         ws.append(headers)
 
         active_pos = PurchaseOrder.objects.exclude(status='CANCELLED').select_related('supplier').order_by('-order_date')
@@ -505,15 +514,19 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             active_pos = active_pos.filter(order_date__lte=end_date)
         pos = [p for p in active_pos if p.remaining_debt_kzt > Decimal('0.00')]
         for p in pos:
+            aging = debt_aging(p)
             ws.append([
                 p.supplier.name if p.supplier else "—",
                 p.supplier.contact_person if p.supplier else "—",
                 p.order_number,
                 p.order_date.strftime("%d.%m.%Y"),
-                float(p.total_amount_kzt),
-                float(p.paid_amount_kzt),
-                float(p.remaining_debt_kzt),
-                str(getattr(p, 'payment_status_display', p.payment_status))
+                aging['due_date'].strftime("%d.%m.%Y") if aging['due_date'] else "",
+                aging['overdue_days'],
+                p.total_amount_kzt,
+                p.paid_amount_kzt,
+                p.remaining_debt_kzt,
+                str(getattr(p, 'payment_status_display', p.payment_status)),
+                aging['bucket'],
             ])
 
     elif report_type == 'costing':
@@ -540,14 +553,14 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
             ws.append([
                 po.order_number,
                 po.product.name if po.product else "—",
-                float(po.quantity_planned),
+                po.quantity_planned,
                 str(po.get_status_display()),
-                float(cost_info['planned_materials_cost_kzt']),
-                float(cost_info['actual_materials_cost_kzt']),
-                float(cost_info['labor_and_overhead_cost_kzt']),
-                float(cost_info['total_actual_cost_kzt']),
-                float(cost_info['actual_unit_cost_kzt']),
-                float(cost_info['cost_variance_kzt']),
+                cost_info['planned_materials_cost_kzt'],
+                cost_info['actual_materials_cost_kzt'],
+                cost_info['labor_and_overhead_cost_kzt'],
+                cost_info['total_actual_cost_kzt'],
+                cost_info['actual_unit_cost_kzt'],
+                cost_info['cost_variance_kzt'],
             ])
 
     elif report_type == 'payments':
@@ -571,14 +584,14 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         for payment in customer_payments:
             ws.append([
                 "Поступление от покупателя", payment.payment_number, payment.payment_date,
-                payment.customer.name, payment.sales_order.order_number, float(payment.amount_kzt),
+                payment.customer.name, payment.sales_order.order_number, payment.amount_kzt,
                 payment.account.name, payment.get_status_display(),
             ])
         for payment in supplier_payments:
             ws.append([
                 "Выплата поставщику", payment.payment_number, payment.payment_date,
                 payment.supplier.name, payment.purchase_order.order_number if payment.purchase_order else "",
-                float(payment.amount_kzt), payment.account.name, payment.get_status_display(),
+                payment.amount_kzt, payment.account.name, payment.get_status_display(),
             ])
 
     elif report_type == 'income_expenses':
@@ -598,14 +611,15 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         for income in incomes:
             ws.append([
                 "Доход", income.income_number, income.income_date, income.get_category_display(),
-                income.payer or income.description, float(income.amount_kzt),
+                income.payer or income.description, income.amount_kzt,
                 income.account.name, "Сторнирован" if income.is_storno else "Проведён",
             ])
         for expense in expenses:
             ws.append([
                 "Расход", expense.expense_number, expense.payment_date, expense.get_category_display(),
-                expense.payee or expense.description, float(expense.amount_kzt),
-                expense.account.name if expense.account else "", "Сторнирован" if expense.is_storno else "Проведён",
+                expense.payee or expense.description, expense.amount_kzt,
+                expense.account.name if expense.account else "",
+                "Сторнирован" if expense.is_storno else "Оплачен" if expense.account_id else "Не оплачен",
             ])
 
     elif report_type == 'profitability':
@@ -622,16 +636,13 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         if end_date:
             orders = orders.filter(created_at__date__lte=end_date)
         for order in orders:
-            production_orders = order.production_orders.exclude(status='CANCELLED').select_related('product')
-            actual_costs = [
-                calculate_production_order_actual_cost(production)['total_actual_cost_kzt']
-                for production in production_orders
-            ]
-            cost = sum(actual_costs, Decimal('0.00')) if actual_costs else order.total_cost_kzt
-            basis = "Факт производства" if actual_costs else "Плановая себестоимость изделия"
+            gross = sales_order_gross_profit(order)
             ws.append([
                 order.order_number, order.customer.name, order.created_at.date(),
-                float(order.total_amount_kzt), float(cost), float(order.total_amount_kzt - cost), basis,
+                gross['revenue_kzt'], gross['cogs_kzt'], gross['gross_profit_kzt'],
+                "Фактическая отгрузочная себестоимость" if gross['cost_basis'] == 'actual'
+                else "Смешанная себестоимость" if gross['cost_basis'] == 'mixed'
+                else "Плановая себестоимость изделия",
             ])
 
     else:
@@ -654,7 +665,7 @@ def export_financial_excel(report_type: str, start_date=None, end_date=None) -> 
         for cell in row:
             cell.font = normal_font
             cell.border = border_thin
-            if isinstance(cell.value, float):
+            if isinstance(cell.value, (float, int, Decimal)):
                 cell.number_format = '#,##0.00'
 
     # Auto-adjust column widths

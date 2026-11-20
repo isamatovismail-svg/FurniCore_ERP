@@ -51,6 +51,7 @@ class PurchaseOrder(models.Model):
     )
     order_date = models.DateField(default=timezone.localdate, verbose_name='Дата заказа')
     planned_delivery_date = models.DateField(null=True, blank=True, verbose_name='Плановая дата поставки')
+    payment_due_date = models.DateField(null=True, blank=True, verbose_name='Срок оплаты')
     total_amount_kzt = models.DecimalField(
         max_digits=16,
         decimal_places=2,

@@ -34,6 +34,7 @@ def create_purchase_order(
     supplier: Supplier,
     created_by,
     planned_delivery_date=None,
+    payment_due_date=None,
     notes: str = '',
     items_data=None,
 ) -> PurchaseOrder:
@@ -45,6 +46,7 @@ def create_purchase_order(
         order_number=generate_po_number(),
         supplier=supplier,
         planned_delivery_date=planned_delivery_date,
+        payment_due_date=payment_due_date,
         notes=notes,
         created_by=created_by,
         status=PurchaseOrderStatus.DRAFT,

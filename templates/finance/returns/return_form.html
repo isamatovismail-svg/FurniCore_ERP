@@ -1,0 +1,70 @@
+{% extends "layouts/base.html" %}
+{% block title %}Возврат покупателю | FurniCore ERP{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  <h1 class="text-2xl font-bold" style="color:#173B35;">Возврат покупателю</h1>
+  <form method="get" class="bg-white rounded-xl border border-gray-100 p-5 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-semibold mb-1">Заказ</label>
+        <select name="order_id" required onchange="this.form.submit()" class="w-full px-3 py-2 border rounded text-xs">
+          <option value="">Выберите заказ</option>
+          {% for order in orders %}
+          <option value="{{ order.pk }}" {% if preselected_order.pk == order.pk %}selected{% endif %}>{{ order.order_number }} — {{ order.customer.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold mb-1">Отгрузка WH-2</label>
+        <select name="shipment_id" required onchange="this.form.submit()" class="w-full px-3 py-2 border rounded text-xs">
+          <option value="">Выберите отгрузку</option>
+          {% for shipment in shipments %}
+          <option value="{{ shipment.pk }}" {% if selected_shipment.pk == shipment.pk %}selected{% endif %}>{{ shipment.doc_number }} — {{ shipment.doc_date|date:"d.m.Y" }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </form>
+
+  {% if selected_shipment %}
+  <form method="post" class="bg-white rounded-xl border border-gray-100 p-5 space-y-5">
+    {% csrf_token %}
+    <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+    <input type="hidden" name="sales_order_id" value="{{ preselected_order.pk }}">
+    <input type="hidden" name="shipment_id" value="{{ selected_shipment.pk }}">
+    <div>
+      <label class="block text-xs font-semibold mb-1">Счёт возврата</label>
+      <select name="account_id" required class="w-full px-3 py-2 border rounded text-xs">
+        {% for account in accounts %}<option value="{{ account.pk }}">{{ account.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">Изделие</th><th class="px-3 py-2 text-right">Отгружено</th><th class="px-3 py-2 text-right">Количество возврата</th></tr></thead>
+        <tbody>
+        {% for line in selected_shipment.items.all %}
+        {% if line.product %}
+        <tr class="border-t">
+          <td class="px-3 py-2">{{ line.product.name }}</td>
+          <td class="px-3 py-2 text-right">{{ line.quantity }}</td>
+          <td class="px-3 py-2 text-right"><input type="number" step="0.001" min="0" max="{{ line.quantity }}" name="qty_{{ line.pk }}" class="w-32 px-2 py-1 border rounded text-right"></td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold mb-1">Причина</label>
+      <textarea name="reason" rows="2" class="w-full px-3 py-2 border rounded text-xs"></textarea>
+    </div>
+    <div class="flex justify-end gap-2">
+      <a href="{% url 'finance:customer_returns' %}" class="px-4 py-2 border rounded text-xs">Отмена</a>
+      <button type="submit" class="px-4 py-2 rounded text-xs text-white" style="background:#173B35;">Провести возврат</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="text-xs text-gray-500">Выберите заказ и проведённую отгрузку WH-2.</p>
+  {% endif %}
+</div>
+{% endblock %}

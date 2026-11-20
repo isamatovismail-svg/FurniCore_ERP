@@ -96,6 +96,7 @@ def order_create(request):
     if request.method == 'POST':
         customer_id = request.POST.get('customer')
         delivery_date_str = request.POST.get('planned_delivery_date')
+        due_date_str = request.POST.get('payment_due_date')
         delivery_address = request.POST.get('delivery_address', '').strip()
         notes = request.POST.get('notes', '').strip()
         discount_percent = Decimal(str(request.POST.get('discount_percent') or '0.00'))
@@ -106,6 +107,12 @@ def order_create(request):
         if delivery_date_str:
             try:
                 planned_delivery_date = datetime.date.fromisoformat(delivery_date_str)
+            except ValueError:
+                pass
+        payment_due_date = None
+        if due_date_str:
+            try:
+                payment_due_date = datetime.date.fromisoformat(due_date_str)
             except ValueError:
                 pass
 
@@ -146,6 +153,7 @@ def order_create(request):
                 notes=notes,
                 discount_percent=discount_percent,
                 deposit_amount_kzt=deposit_amount_kzt,
+                payment_due_date=payment_due_date,
             )
             messages.success(request, f'Заказ клиента {so.order_number} успешно сформирован.')
             return redirect('sales:order_detail', pk=so.id)

@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.core.exceptions import ValidationError
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -22,6 +22,8 @@ from apps.finance.models import (
     IncomeCategory,
     PaymentMethod,
     PaymentStatus,
+    CustomerReturn,
+    CustomerReturnStatus,
 )
 from apps.finance.services import (
     get_financial_dashboard_kpis,
@@ -37,6 +39,9 @@ from apps.finance.services import (
     storno_account_transfer,
     ensure_default_accounts,
     calculate_production_order_actual_cost,
+    debt_aging,
+    record_customer_return,
+    storno_customer_return,
 )
 from apps.finance.reports import (
     generate_customer_payment_pdf,
@@ -44,9 +49,14 @@ from apps.finance.reports import (
     generate_financial_report_pdf,
     export_financial_excel,
 )
-from apps.sales.models import SalesOrder, OrderStatus
+from apps.sales.models import SalesOrder, OrderStatus, Customer
 from apps.suppliers.models import PurchaseOrder, Supplier, PurchaseOrderStatus
 from apps.production.models import ProductionOrder
+from apps.warehouses.models import (
+    WarehouseDocument,
+    WarehouseDocumentType,
+    DocumentStatus,
+)
 
 
 def can_manage_finance(user) -> bool:
@@ -56,6 +66,17 @@ def can_manage_finance(user) -> bool:
         UserRole.OWNER,
         UserRole.ADMIN,
         UserRole.ACCOUNTANT,
+    ] or user.is_superuser
+
+
+def can_view_finance(user) -> bool:
+    if not user.is_authenticated:
+        return False
+    return user.role in [
+        UserRole.OWNER,
+        UserRole.ADMIN,
+        UserRole.ACCOUNTANT,
+        UserRole.DEMO_VIEWER,
     ] or user.is_superuser
 
 
@@ -108,6 +129,9 @@ def index(request):
     Отображает P&L, Cash Flow, остатки на счетах, дебиторку, кредиторку,
     структуру расходов и последние операции.
     """
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     ensure_default_accounts()
 
     period = request.GET.get('period', 'all')
@@ -154,6 +178,9 @@ def index(request):
 @login_required
 def customer_payment_list(request):
     """Реестр оплат от клиентов."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
     start_date, end_date = parse_date_filter(
@@ -276,6 +303,8 @@ def customer_payment_create(request):
 @login_required
 def customer_payment_pdf(request, pk):
     """Скачать квитанцию об оплате покупателя в PDF."""
+    if not can_view_finance(request.user):
+        return redirect('/')
     payment = get_object_or_404(CustomerPayment.objects.select_related('customer', 'sales_order', 'account', 'recorded_by'), pk=pk)
     pdf_bytes = generate_customer_payment_pdf(payment)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -311,6 +340,9 @@ def customer_payment_storno(request, pk):
 @login_required
 def supplier_payment_list(request):
     """Реестр оплат поставщикам."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
     start_date, end_date = parse_date_filter(
@@ -441,6 +473,8 @@ def supplier_payment_create(request):
 @login_required
 def supplier_payment_pdf(request, pk):
     """Скачать платёжный ордер поставщику в PDF."""
+    if not can_view_finance(request.user):
+        return redirect('/')
     payment = get_object_or_404(SupplierPayment.objects.select_related('supplier', 'purchase_order', 'account', 'recorded_by'), pk=pk)
     pdf_bytes = generate_supplier_payment_pdf(payment)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -476,6 +510,9 @@ def supplier_payment_storno(request, pk):
 @login_required
 def account_list(request):
     """Счета фабрики, кассы и межбанковские переводы."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     ensure_default_accounts()
     accounts = FinancialAccount.objects.all().order_by('account_type', 'name')
     total_balance = sum(a.balance_kzt for a in accounts if a.is_active)
@@ -565,6 +602,9 @@ def account_transfer_storno(request, pk):
 @login_required
 def expense_list(request):
     """Реестр расходов предприятия."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
     category_filter = request.GET.get('category', '')
 
@@ -666,6 +706,9 @@ def expense_storno(request, pk):
 
 @login_required
 def income_list(request):
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
     category = request.GET.get('category', '')
     incomes = GeneralIncome.objects.select_related('account', 'recorded_by')
@@ -749,7 +792,11 @@ def income_storno(request, pk):
 @login_required
 def receivables_list(request):
     """Дебиторская задолженность (долги покупателей)."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
+    customer_id = request.GET.get('customer', '').strip()
     start_date, end_date = parse_date_filter(
         'custom', request.GET.get('start_date', ''), request.GET.get('end_date', '')
     )
@@ -765,12 +812,19 @@ def receivables_list(request):
             Q(customer__company_name__icontains=q) |
             Q(customer__phone__icontains=q)
         )
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
     if start_date:
         qs = qs.filter(created_at__date__gte=start_date)
     if end_date:
         qs = qs.filter(created_at__date__lte=end_date)
 
     orders = [o for o in qs if o.remaining_debt_kzt > Decimal('0.00')]
+    aging_totals = {'1_30': Decimal('0.00'), '31_60': Decimal('0.00'), '61_90': Decimal('0.00'), 'over_90': Decimal('0.00'), 'not_due': Decimal('0.00'), 'no_due_date': Decimal('0.00')}
+    for order in orders:
+        aging = debt_aging(order)
+        order.aging_data = aging
+        aging_totals[aging['bucket']] = aging_totals.get(aging['bucket'], Decimal('0.00')) + aging['debt']
     total_debt = sum((o.remaining_debt_kzt for o in orders), Decimal('0.00'))
     total_sales = sum((o.total_amount_kzt for o in orders), Decimal('0.00'))
 
@@ -782,6 +836,9 @@ def receivables_list(request):
         'end_date': end_date,
         'total_debt': total_debt,
         'total_sales': total_sales,
+        'aging_totals': aging_totals,
+        'customers': Customer.objects.filter(is_active=True).order_by('full_name'),
+        'customer_id': customer_id,
         'can_manage': can_manage_finance(request.user),
     }
     return render(request, 'finance/debts/receivables.html', context)
@@ -790,7 +847,11 @@ def receivables_list(request):
 @login_required
 def payables_list(request):
     """Кредиторская задолженность (долги фабрики перед поставщиками)."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
+    supplier_id = request.GET.get('supplier', '').strip()
     start_date, end_date = parse_date_filter(
         'custom', request.GET.get('start_date', ''), request.GET.get('end_date', '')
     )
@@ -805,12 +866,19 @@ def payables_list(request):
             Q(supplier__name__icontains=q) |
             Q(supplier__contact_person__icontains=q)
         )
+    if supplier_id:
+        qs = qs.filter(supplier_id=supplier_id)
     if start_date:
         qs = qs.filter(order_date__gte=start_date)
     if end_date:
         qs = qs.filter(order_date__lte=end_date)
 
     orders = [p for p in qs if p.remaining_debt_kzt > Decimal('0.00')]
+    aging_totals = {'1_30': Decimal('0.00'), '31_60': Decimal('0.00'), '61_90': Decimal('0.00'), 'over_90': Decimal('0.00'), 'not_due': Decimal('0.00'), 'no_due_date': Decimal('0.00')}
+    for order in orders:
+        aging = debt_aging(order)
+        order.aging_data = aging
+        aging_totals[aging['bucket']] = aging_totals.get(aging['bucket'], Decimal('0.00')) + aging['debt']
     total_debt = sum((p.remaining_debt_kzt for p in orders), Decimal('0.00'))
     total_purchases = sum((p.total_amount_kzt for p in orders), Decimal('0.00'))
 
@@ -822,6 +890,9 @@ def payables_list(request):
         'end_date': end_date,
         'total_debt': total_debt,
         'total_purchases': total_purchases,
+        'aging_totals': aging_totals,
+        'suppliers': Supplier.objects.filter(is_active=True).order_by('name'),
+        'supplier_id': supplier_id,
         'can_manage': can_manage_finance(request.user),
     }
     return render(request, 'finance/debts/payables.html', context)
@@ -837,6 +908,9 @@ def cost_accounting_view(request):
     Калькуляция фактической себестоимости производственных заказов:
     План (BOM) vs Факт (списания со склада WH-1) + прямая зарплата + накладные расходы.
     """
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых данных.')
+        return redirect('/')
     q = request.GET.get('q', '').strip()
 
     orders = ProductionOrder.objects.select_related('product').all().order_by('-created_at')
@@ -872,12 +946,144 @@ def cost_accounting_view(request):
 
 
 # ==============================================================================
+# ВОЗВРАТЫ ПОКУПАТЕЛЕЙ
+# ==============================================================================
+
+@login_required
+def customer_return_list(request):
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра возвратов.')
+        return redirect('/')
+    returns = CustomerReturn.objects.select_related(
+        'sales_order', 'shipment', 'customer', 'account', 'recorded_by'
+    ).prefetch_related('items__shipment_item').order_by('-created_at')
+    return render(request, 'finance/returns/return_list.html', {
+        'page_title': 'Возвраты покупателей',
+        'returns': returns,
+        'can_manage': can_manage_finance(request.user),
+    })
+
+
+@login_required
+@deny_demo_viewer
+def customer_return_create(request):
+    if not can_manage_finance(request.user):
+        messages.error(request, 'Недостаточно прав для проведения возврата.')
+        return redirect('finance:customer_returns')
+
+    order_id = request.GET.get('order_id', '')
+    shipment_id = request.GET.get('shipment_id') or request.POST.get('shipment_id', '')
+    preselected_order = None
+    shipments = WarehouseDocument.objects.filter(
+        doc_type=WarehouseDocumentType.SHIPMENT,
+        status=DocumentStatus.POSTED,
+    ).select_related('sales_order', 'customer', 'warehouse').order_by('-doc_date')
+    if order_id:
+        preselected_order = get_object_or_404(SalesOrder, pk=order_id)
+        shipments = shipments.filter(sales_order=preselected_order)
+    elif shipment_id:
+        selected = shipments.filter(pk=shipment_id).first()
+        if selected:
+            preselected_order = selected.sales_order
+            order_id = str(preselected_order.pk)
+            shipments = shipments.filter(sales_order=preselected_order)
+
+    if request.method == 'POST':
+        order = get_object_or_404(SalesOrder, pk=request.POST.get('sales_order_id'))
+        shipment = get_object_or_404(
+            WarehouseDocument,
+            pk=request.POST.get('shipment_id'),
+            doc_type=WarehouseDocumentType.SHIPMENT,
+            status=DocumentStatus.POSTED,
+            sales_order=order,
+        )
+        account = get_object_or_404(FinancialAccount, pk=request.POST.get('account_id'))
+        returned_items = {}
+        invalid_quantity = False
+        for line in shipment.items.filter(product__isnull=False).select_related('product'):
+            quantity = request.POST.get(f'qty_{line.pk}', '').strip()
+            if quantity:
+                try:
+                    quantity_value = Decimal(quantity)
+                except InvalidOperation:
+                    messages.error(request, f'Укажите корректное количество для изделия «{line.product.name}».')
+                    invalid_quantity = True
+                    continue
+                if not quantity_value.is_finite():
+                    messages.error(request, f'Количество для изделия «{line.product.name}» должно быть конечным числом.')
+                    invalid_quantity = True
+                    continue
+                if quantity_value < Decimal('0'):
+                    messages.error(request, f'Количество возврата для изделия «{line.product.name}» не может быть отрицательным.')
+                    invalid_quantity = True
+                    continue
+                if quantity_value > Decimal('0'):
+                    returned_items[line.pk] = quantity_value
+        if not invalid_quantity:
+            try:
+                customer_return = record_customer_return(
+                    sales_order=order,
+                    shipment=shipment,
+                    account=account,
+                    returned_items=returned_items,
+                    user=request.user,
+                    reason=request.POST.get('reason', '').strip(),
+                    idempotency_key=request.POST.get('idempotency_key') or uuid.uuid4(),
+                )
+                messages.success(
+                    request,
+                    f'Возврат № {customer_return.return_number} проведён на сумму '
+                    f'{customer_return.refund_amount_kzt:,.2f} ₸.',
+                )
+                return redirect('finance:customer_returns')
+            except (ValidationError, ValueError) as exc:
+                messages.error(request, f'Ошибка проведения возврата: {exc}')
+
+    selected_shipment = None
+    if shipment_id:
+        selected_shipment = shipments.filter(pk=shipment_id).first()
+    return render(request, 'finance/returns/return_form.html', {
+        'page_title': 'Возврат покупателю',
+        'orders': SalesOrder.objects.exclude(status__in=[OrderStatus.DRAFT, OrderStatus.CANCELLED]).order_by('-created_at'),
+        'shipments': shipments,
+        'selected_shipment': selected_shipment,
+        'preselected_order': preselected_order,
+        'accounts': FinancialAccount.objects.filter(is_active=True, currency='KZT').order_by('name'),
+        'idempotency_key': uuid.uuid4(),
+        'today': timezone.localdate(),
+    })
+
+
+@login_required
+@deny_demo_viewer
+def customer_return_storno(request, pk):
+    if not can_manage_finance(request.user):
+        messages.error(request, 'Недостаточно прав для сторнирования возврата.')
+        return redirect('finance:customer_returns')
+    if request.method == 'POST':
+        customer_return = get_object_or_404(CustomerReturn, pk=pk)
+        try:
+            storno_customer_return(
+                customer_return,
+                request.user,
+                request.POST.get('reason', '').strip(),
+            )
+            messages.warning(request, f'Возврат № {customer_return.return_number} сторнирован.')
+        except ValidationError as exc:
+            messages.error(request, f'Ошибка сторнирования возврата: {exc}')
+    return redirect('finance:customer_returns')
+
+
+# ==============================================================================
 # ЭКСПОРТ В EXCEL (EXCEL EXPORTS)
 # ==============================================================================
 
 @login_required
 def export_excel(request):
     """Выгрузка финансовых отчётов в формате Excel (.xlsx)."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых отчётов.')
+        return redirect('/')
     report_type = request.GET.get('type', 'pandl')
     period = request.GET.get('period', 'all')
     start_date_str = request.GET.get('start_date', '')
@@ -918,6 +1124,9 @@ def export_excel(request):
 @login_required
 def export_pdf(request):
     """Выгрузка сводного финансового отчёта PDF с кириллическим шрифтом."""
+    if not can_view_finance(request.user):
+        messages.error(request, 'Недостаточно прав для просмотра финансовых отчётов.')
+        return redirect('/')
     period = request.GET.get('period', 'all')
     start_date, end_date = parse_date_filter(
         period,

@@ -103,7 +103,7 @@
               {{ exp.payee|default:"—" }}
             </td>
             <td class="px-5 py-3.5 text-gray-500">
-              {{ exp.account.name|default:"Основная касса" }}
+              {% if exp.account %}{{ exp.account.name }}{% else %}Не оплачено{% endif %}
             </td>
             <td class="px-5 py-3.5 text-right font-bold text-gray-900">
               {{ exp.amount_kzt|floatformat:2|intcomma }} ₸

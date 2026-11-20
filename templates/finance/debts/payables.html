@@ -60,6 +60,12 @@
     <form method="get" class="flex flex-col gap-3 md:flex-row">
       <input type="text" name="q" value="{{ q }}" placeholder="Поиск по номеру закупки, поставщику или контактному лицу..."
              class="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-xs outline-none bg-white">
+      <select name="supplier" class="px-3 py-2 rounded-lg border border-gray-200 text-xs bg-white">
+        <option value="">Все поставщики</option>
+        {% for supplier in suppliers %}
+        <option value="{{ supplier.pk }}" {% if supplier_id == supplier.pk|stringformat:"s" %}selected{% endif %}>{{ supplier.name }}</option>
+        {% endfor %}
+      </select>
       <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="px-3 py-2 rounded-lg border border-gray-200 text-xs" aria-label="Дата заказа от">
       <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="px-3 py-2 rounded-lg border border-gray-200 text-xs" aria-label="Дата заказа до">
       <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-sm" style="background:#173B35;">
@@ -90,6 +96,7 @@
             <th class="px-5 py-3 font-semibold text-right">Сумма закупки (₸)</th>
             <th class="px-5 py-3 font-semibold text-right">Выплачено (₸)</th>
             <th class="px-5 py-3 font-semibold text-right">Долг фабрики (₸)</th>
+            <th class="px-5 py-3 font-semibold text-center">Срок / просрочка</th>
             <th class="px-5 py-3 font-semibold text-center">Статус оплаты</th>
             <th class="px-5 py-3 font-semibold text-right">Действие</th>
           </tr>
@@ -121,6 +128,13 @@
               {{ po.remaining_debt_kzt|floatformat:0|intcomma }} ₸
             </td>
             <td class="px-5 py-3.5 text-center">
+              {% if po.aging_data.due_date %}
+              <div>{{ po.aging_data.due_date|date:"d.m.Y" }}</div>
+              {% if po.aging_data.is_overdue %}<span class="text-red-700 font-semibold">Просрочено {{ po.aging_data.overdue_days }} дн.</span>
+              {% else %}<span class="text-gray-500">Не просрочено</span>{% endif %}
+              {% else %}<span class="text-gray-400">Срок не задан</span>{% endif %}
+            </td>
+            <td class="px-5 py-3.5 text-center">
               {% if po.payment_status == 'PARTIALLY_PAID' %}
               <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">Частично</span>
               {% elif po.payment_status == 'PAID' %}
@@ -138,7 +152,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="9" class="px-5 py-10 text-center text-gray-400">
+            <td colspan="10" class="px-5 py-10 text-center text-gray-400">
               Задолженность перед поставщиками отсутствует! Все счета полностью оплачены.
             </td>
           </tr>

@@ -224,6 +224,7 @@ def order_create(request):
     if request.method == 'POST':
         supplier_id = request.POST.get('supplier')
         delivery_date_str = request.POST.get('planned_delivery_date')
+        due_date_str = request.POST.get('payment_due_date')
         notes = request.POST.get('notes', '').strip()
 
         supplier = get_object_or_404(Supplier, pk=supplier_id)
@@ -231,6 +232,12 @@ def order_create(request):
         if delivery_date_str:
             try:
                 planned_delivery_date = datetime.date.fromisoformat(delivery_date_str)
+            except ValueError:
+                pass
+        payment_due_date = None
+        if due_date_str:
+            try:
+                payment_due_date = datetime.date.fromisoformat(due_date_str)
             except ValueError:
                 pass
 
@@ -263,6 +270,7 @@ def order_create(request):
                 supplier=supplier,
                 created_by=request.user,
                 planned_delivery_date=planned_delivery_date,
+                payment_due_date=payment_due_date,
                 notes=notes,
                 items_data=items_data,
             )

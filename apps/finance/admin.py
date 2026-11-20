@@ -7,6 +7,8 @@ from .models import (
     FinancialAccount,
     GeneralIncome,
     SupplierPayment,
+    CustomerReturn,
+    CustomerReturnItem,
 )
 
 
@@ -61,3 +63,10 @@ class GeneralIncomeAdmin(ReadOnlyFinanceAdmin):
     list_display = ('income_number', 'income_date', 'category', 'payer', 'amount_kzt', 'account', 'is_storno')
     list_filter = ('category', 'is_storno', 'income_date')
     search_fields = ('income_number', 'payer', 'description')
+
+
+@admin.register(CustomerReturn)
+class CustomerReturnAdmin(ReadOnlyFinanceAdmin):
+    list_display = ('return_number', 'sales_order', 'customer', 'refund_amount_kzt', 'account', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('return_number', 'sales_order__order_number', 'customer__full_name')

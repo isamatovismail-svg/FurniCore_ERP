@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from decimal import Decimal, InvalidOperation
 from django.db import models, transaction
@@ -15,11 +16,24 @@ from apps.finance.models import (
     Expense,
     ExpenseCategory,
     GeneralIncome,
+    IncomeCategory,
+    CustomerReturn,
+    CustomerReturnItem,
+    CustomerReturnStatus,
     PaymentMethod,
     PaymentStatus,
 )
 from apps.production.models import ProductionOrder
-from apps.warehouses.models import StockMovement, MovementType
+from apps.warehouses.models import (
+    StockMovement,
+    MovementType,
+    WarehouseType,
+    WarehouseDocument,
+    WarehouseDocumentItem,
+    WarehouseDocumentType,
+    DocumentStatus,
+)
+from apps.warehouses.services import generate_doc_number, post_document, cancel_document
 
 
 def _money_amount(value) -> Decimal:
@@ -107,13 +121,13 @@ def register_customer_payment(
     if payment_method not in PaymentMethod.values:
         raise ValidationError('Выберите допустимый способ оплаты.')
 
-    acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
     so = None
     if sales_order:
         so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
         customer = customer or so.customer
     if not so:
         raise ValidationError('Платёж покупателя должен быть привязан к заказу.')
+    acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
     if customer.pk != so.customer_id:
         raise ValidationError('Покупатель не совпадает с покупателем выбранного заказа.')
 
@@ -130,6 +144,21 @@ def register_customer_payment(
     if replay:
         return replay
     _validate_account(acc)
+
+    duplicate = CustomerPayment.objects.filter(
+        sales_order=so,
+        customer=customer,
+        account=acc,
+        amount_kzt=amount,
+        payment_method=payment_method,
+        reference_number=reference_number,
+        status=PaymentStatus.COMPLETED,
+        created_at__gte=timezone.now() - datetime.timedelta(seconds=10),
+    ).first()
+    if duplicate:
+        raise ValidationError(
+            f'Платёж с такими параметрами уже зарегистрирован под номером {duplicate.payment_number}.'
+        )
 
     remaining_debt = so.remaining_debt_kzt
     if amount > remaining_debt:
@@ -263,6 +292,21 @@ def register_supplier_payment(
     if replay:
         return replay
     _validate_account(acc)
+
+    duplicate = SupplierPayment.objects.filter(
+        purchase_order=po,
+        supplier=supplier,
+        account=acc,
+        amount_kzt=amount,
+        payment_method=payment_method,
+        reference_number=reference_number,
+        status=PaymentStatus.COMPLETED,
+        created_at__gte=timezone.now() - datetime.timedelta(seconds=10),
+    ).first()
+    if duplicate:
+        raise ValidationError(
+            f'Платёж с такими параметрами уже зарегистрирован под номером {duplicate.payment_number}.'
+        )
 
     if po and amount > po.remaining_debt_kzt:
         raise ValidationError(
@@ -448,7 +492,7 @@ def record_expense(
     payment_date=None,
     idempotency_key=None,
 ) -> Expense:
-    """Регистрация операционного расхода предприятия с опциональным списанием с кассы/счёта."""
+    """Запись операционного расхода; денежный счёт связывается, если расход оплачен."""
     user = user or recorded_by
     amount = _money_amount(amount_kzt)
     if amount <= Decimal('0.00'):
@@ -457,10 +501,7 @@ def record_expense(
         raise ValidationError('Выберите допустимую статью расходов.')
     if payment_method not in PaymentMethod.values:
         raise ValidationError('Выберите допустимый способ оплаты.')
-    if not account:
-        raise ValidationError('Для расхода необходимо выбрать денежный счёт.')
-
-    acc = FinancialAccount.objects.select_for_update().get(pk=account.pk)
+    acc = FinancialAccount.objects.select_for_update().get(pk=account.pk) if account else None
     replay = _idempotent_operation(Expense, idempotency_key, {
         'category': category,
         'amount_kzt': amount,
@@ -472,14 +513,15 @@ def record_expense(
     })
     if replay:
         return replay
-    _validate_account(acc)
-    if acc.current_balance_kzt < amount:
-        raise ValidationError(
-            f'Недостаточно средств на счёте «{acc.name}». '
-            f'Остаток: {acc.current_balance_kzt:,.2f} ₸, расход: {amount:,.2f} ₸.'
-        )
-    acc.current_balance_kzt -= amount
-    acc.save(update_fields=['current_balance_kzt', 'updated_at'])
+    if acc:
+        _validate_account(acc)
+        if acc.current_balance_kzt < amount:
+            raise ValidationError(
+                f'Недостаточно средств на счёте «{acc.name}». '
+                f'Остаток: {acc.current_balance_kzt:,.2f} ₸, расход: {amount:,.2f} ₸.'
+            )
+        acc.current_balance_kzt -= amount
+        acc.save(update_fields=['current_balance_kzt', 'updated_at'])
 
     exp = Expense.objects.create(
         expense_number=generate_payment_number('EXP'),
@@ -668,7 +710,16 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
     if date_to:
         sales_qs = sales_qs.filter(created_at__date__lte=date_to)
 
-    total_accrual_revenue = sales_qs.aggregate(t=models.Sum('total_amount_kzt'))['t'] or Decimal('0.00')
+    gross_accrual_revenue = sales_qs.aggregate(t=models.Sum('total_amount_kzt'))['t'] or Decimal('0.00')
+    returns_qs = CustomerReturn.objects.filter(status=CustomerReturnStatus.POSTED)
+    if date_from:
+        returns_qs = returns_qs.filter(posted_at__date__gte=date_from)
+    if date_to:
+        returns_qs = returns_qs.filter(posted_at__date__lte=date_to)
+    customer_refunds = returns_qs.aggregate(
+        t=models.Sum('refund_amount_kzt')
+    )['t'] or Decimal('0.00')
+    total_accrual_revenue = gross_accrual_revenue - customer_refunds
 
     # Прочие доходы
     incomes_qs = GeneralIncome.objects.filter(is_storno=False)
@@ -701,8 +752,11 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
     if date_to:
         exp_qs = exp_qs.filter(payment_date__lte=date_to)
     general_expenses = exp_qs.aggregate(t=models.Sum('amount_kzt'))['t'] or Decimal('0.00')
+    paid_expenses = exp_qs.filter(account__isnull=False).aggregate(
+        t=models.Sum('amount_kzt')
+    )['t'] or Decimal('0.00')
 
-    cash_outflow = supplier_cash_paid + general_expenses
+    cash_outflow = supplier_cash_paid + paid_expenses + customer_refunds
     net_cash_flow = cash_inflow - cash_outflow
 
     # 3. Расходы по начислению и Финансовый результат (P&L)
@@ -758,19 +812,13 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
 
     sales_order_profits = []
     for order in sales_qs.select_related('customer').prefetch_related('items__product'):
-        linked_production = order.production_orders.exclude(status='CANCELLED').select_related('product')
-        linked_costs = [
-            calculate_production_order_actual_cost(production)['total_actual_cost_kzt']
-            for production in linked_production
-        ]
-        cost_basis = 'actual' if linked_costs else 'planned'
-        order_cost = sum(linked_costs, Decimal('0.00')) if linked_costs else order.total_cost_kzt
+        gross = sales_order_gross_profit(order)
         sales_order_profits.append({
             'order': order,
-            'revenue': order.total_amount_kzt,
-            'cost': order_cost,
-            'profit': order.total_amount_kzt - order_cost,
-            'cost_basis': cost_basis,
+            'revenue': gross['revenue_kzt'],
+            'cost': gross['cogs_kzt'],
+            'profit': gross['gross_profit_kzt'],
+            'cost_basis': gross['cost_basis'],
         })
     sales_order_profits.sort(key=lambda row: row['profit'], reverse=True)
 
@@ -798,6 +846,8 @@ def get_financial_dashboard_kpis(date_from=None, date_to=None, start_date=None, 
         'total_revenue_kzt': total_revenue_all,
         'general_expenses': general_expenses,
         'cash_expenses_kzt': general_expenses,
+        'cash_expenses_paid_kzt': paid_expenses,
+        'customer_refunds_kzt': customer_refunds,
         'purchases_total': supplier_cash_paid,
         'purchases_total_kzt': supplier_cash_paid,
         'net_profit': net_profit,
@@ -866,26 +916,47 @@ def calculate_production_order_actual_cost(order) -> dict:
     actual_labor_cost = order.actual_labor_cost_kzt
     overhead_cost = order.overhead_cost_kzt
 
-    # 3. Брак и потери уже входят в стоимость выданного материала; показываем их отдельно.
+    # 3. Производственный сервис учитывает стоимость брака отдельно от списаний.
     waste_cost = sum((w.cost_kzt for w in order.wastes.all()), Decimal('0.00'))
 
-    actual_total_cost = actual_materials_cost + actual_labor_cost + overhead_cost
+    planned_materials_cost = order.planned_materials_cost_kzt
+    planned_labor_cost = order.planned_labor_cost_kzt
+    planned_overhead_cost = order.overhead_cost_kzt
+    if order.bom_id:
+        batch_quantity = order.quantity_planned
+        if planned_materials_cost == Decimal('0.00'):
+            planned_materials_cost = (order.bom.total_materials_cost_kzt * batch_quantity).quantize(Decimal('0.01'))
+        if planned_labor_cost == Decimal('0.00'):
+            planned_labor_cost = (
+                order.bom.standard_labor_hours
+                * order.bom.labor_rate_hourly_kzt
+                * batch_quantity
+            ).quantize(Decimal('0.01'))
+        if planned_overhead_cost == Decimal('0.00'):
+            planned_overhead_cost = (order.bom.overhead_rate_kzt * batch_quantity).quantize(Decimal('0.01'))
+    planned_total_cost = order.planned_cost_kzt or (
+        planned_materials_cost + planned_labor_cost + planned_overhead_cost
+    )
+    if actual_labor_cost == Decimal('0.00') and order.bom_id:
+        actual_hours = sum((stage.actual_hours for stage in order.stages.all()), Decimal('0.00'))
+        actual_labor_cost = (actual_hours * order.bom.labor_rate_hourly_kzt).quantize(Decimal('0.01'))
+    actual_total_cost = actual_materials_cost + actual_labor_cost + overhead_cost + waste_cost
     qty_produced = order.quantity_produced if order.quantity_produced > Decimal('0.00') else order.quantity_planned
     unit_cost = (actual_total_cost / qty_produced).quantize(Decimal('0.01')) if qty_produced > Decimal('0.00') else Decimal('0.00')
 
     # Отклонение план/факт
-    cost_variance = actual_total_cost - order.planned_cost_kzt
-    variance_pct = round(float(cost_variance / order.planned_cost_kzt) * 100, 1) if order.planned_cost_kzt > Decimal('0.00') else 0.0
+    cost_variance = actual_total_cost - planned_total_cost
+    variance_pct = round(float(cost_variance / planned_total_cost) * 100, 1) if planned_total_cost > Decimal('0.00') else 0.0
 
     return {
-        'planned_cost': order.planned_cost_kzt,
-        'planned_cost_kzt': order.planned_cost_kzt,
-        'planned_materials': order.planned_materials_cost_kzt,
-        'planned_materials_cost_kzt': order.planned_materials_cost_kzt,
-        'planned_labor': order.planned_labor_cost_kzt,
-        'planned_labor_cost_kzt': order.planned_labor_cost_kzt,
-        'planned_overhead': order.overhead_cost_kzt,
-        'planned_overhead_cost_kzt': order.overhead_cost_kzt,
+        'planned_cost': planned_total_cost,
+        'planned_cost_kzt': planned_total_cost,
+        'planned_materials': planned_materials_cost,
+        'planned_materials_cost_kzt': planned_materials_cost,
+        'planned_labor': planned_labor_cost,
+        'planned_labor_cost_kzt': planned_labor_cost,
+        'planned_overhead': planned_overhead_cost,
+        'planned_overhead_cost_kzt': planned_overhead_cost,
         'actual_materials': actual_materials_cost,
         'actual_materials_cost_kzt': actual_materials_cost,
         'actual_material_cost_kzt': actual_materials_cost,
@@ -905,4 +976,304 @@ def calculate_production_order_actual_cost(order) -> dict:
         'cost_variance_kzt': cost_variance,
         'variance_pct': variance_pct,
         'is_over_budget': cost_variance > Decimal('0.00'),
+    }
+
+
+@transaction.atomic
+def record_customer_return(
+    sales_order: SalesOrder,
+    shipment: WarehouseDocument,
+    account: FinancialAccount,
+    returned_items: dict,
+    user: User,
+    reason: str = '',
+    idempotency_key=None,
+) -> CustomerReturn:
+    """Register a partial/full buyer return and refund via existing WH-2 document service."""
+    if not idempotency_key:
+        raise ValidationError('Для возврата обязателен ключ идемпотентности.')
+    try:
+        key = uuid.UUID(str(idempotency_key))
+    except (ValueError, TypeError, AttributeError):
+        raise ValidationError('Некорректный ключ идемпотентности возврата.')
+
+    so = SalesOrder.objects.select_for_update().get(pk=sales_order.pk)
+    shipment_doc = WarehouseDocument.objects.select_for_update().get(pk=shipment.pk)
+    acc = FinancialAccount.objects.get(pk=account.pk)
+
+    replay = CustomerReturn.objects.filter(idempotency_key=key).first()
+    if replay:
+        normalized_items = {}
+        for item_id, raw_quantity in returned_items.items():
+            try:
+                quantity = Decimal(str(raw_quantity)).quantize(Decimal('0.001'))
+            except (InvalidOperation, TypeError, ValueError):
+                raise ValidationError('Укажите корректное количество возврата.')
+            normalized_items[str(item_id)] = quantity
+        existing_items = {
+            str(item_id): quantity
+            for item_id, quantity in replay.items.values_list('shipment_item_id', 'quantity')
+        }
+        if (
+            replay.sales_order_id != so.pk
+            or replay.shipment_id != shipment_doc.pk
+            or replay.account_id != acc.pk
+            or replay.reason != reason
+            or existing_items != normalized_items
+        ):
+            raise ValidationError('Ключ повторной отправки уже использован для другого возврата.')
+        if replay.status != CustomerReturnStatus.POSTED:
+            raise ValidationError('Возврат с этим ключом уже сторнирован и не может быть проведён повторно.')
+        return replay
+
+    if (
+        shipment_doc.doc_type != WarehouseDocumentType.SHIPMENT
+        or shipment_doc.status != DocumentStatus.POSTED
+        or shipment_doc.sales_order_id != so.pk
+        or shipment_doc.warehouse.warehouse_type != WarehouseType.FINISHED_PRODUCTS
+    ):
+        raise ValidationError('Возврат должен ссылаться на проведённую отгрузку этого заказа с WH-2.')
+    if shipment_doc.customer_id != so.customer_id:
+        raise ValidationError('Покупатель исходной отгрузки не совпадает с заказом.')
+    if not acc.is_active or acc.currency != 'KZT':
+        raise ValidationError('Для возврата выберите активный счёт в KZT.')
+
+    refund_total = Decimal('0.00')
+    lines = []
+    for item_id, raw_quantity in returned_items.items():
+        try:
+            quantity = Decimal(str(raw_quantity)).quantize(Decimal('0.001'))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError('Укажите корректное количество возврата.')
+        if quantity <= Decimal('0.000'):
+            raise ValidationError('Количество возврата должно быть больше нуля.')
+
+        shipment_item = (
+            WarehouseDocumentItem.objects.select_for_update(of=('self',))
+            .select_related('product', 'sales_order_item')
+            .filter(pk=item_id, document=shipment_doc)
+            .first()
+        )
+        if not shipment_item or not shipment_item.product_id:
+            raise ValidationError('Позиция не принадлежит исходной отгрузке.')
+
+        returned = CustomerReturnItem.objects.filter(
+            shipment_item=shipment_item,
+            customer_return__status=CustomerReturnStatus.POSTED,
+        ).aggregate(total=models.Sum('quantity'))['total'] or Decimal('0.000')
+        remaining = shipment_item.quantity - returned
+        if quantity > remaining:
+            raise ValidationError(
+                f'Нельзя вернуть {quantity} шт.; по отгрузке доступно {remaining} шт.'
+            )
+
+        sale_unit_price = shipment_item.sale_unit_price_kzt
+        if sale_unit_price <= Decimal('0.00') and shipment_item.sales_order_item:
+            order_item = shipment_item.sales_order_item
+            sale_unit_price = (
+                order_item.unit_price_kzt
+                * (Decimal('100.00') - order_item.discount_percent)
+                / Decimal('100.00')
+            ).quantize(Decimal('0.01'))
+        cogs_unit = shipment_item.unit_cost_kzt
+        line_refund = (quantity * sale_unit_price).quantize(Decimal('0.01'))
+        line_cogs = (quantity * cogs_unit).quantize(Decimal('0.01'))
+        refund_total += line_refund
+        lines.append((shipment_item, quantity, line_refund, line_cogs))
+
+    if not lines:
+        raise ValidationError('Укажите хотя бы одну позицию возврата.')
+    completed_payments = list(
+        CustomerPayment.objects.select_for_update()
+        .filter(sales_order=so, status=PaymentStatus.COMPLETED)
+        .values_list('amount_kzt', flat=True)
+    )
+    paid_amount = sum(completed_payments, Decimal('0.00'))
+    already_refunded = CustomerReturn.objects.filter(
+        sales_order=so,
+        status=CustomerReturnStatus.POSTED,
+    ).aggregate(total=models.Sum('refund_amount_kzt'))['total'] or Decimal('0.00')
+    refundable_amount = max(Decimal('0.00'), paid_amount - already_refunded)
+    if refund_total > refundable_amount:
+        raise ValidationError(
+            f'Возврат {refund_total:,.2f} ₸ превышает фактически оплаченную сумму, '
+            f'доступную к возврату ({refundable_amount:,.2f} ₸).'
+        )
+    acc = FinancialAccount.objects.select_for_update().get(pk=acc.pk)
+    if not acc.is_active or acc.currency != 'KZT':
+        raise ValidationError('Для возврата выберите активный счёт в KZT.')
+    if acc.current_balance_kzt < refund_total:
+        raise ValidationError(
+            f'Недостаточно средств на счёте «{acc.name}» для возврата {refund_total:,.2f} ₸.'
+        )
+
+    return_doc = WarehouseDocument.objects.create(
+        doc_number=generate_doc_number(WarehouseDocumentType.CUSTOMER_RETURN),
+        doc_type=WarehouseDocumentType.CUSTOMER_RETURN,
+        status=DocumentStatus.DRAFT,
+        warehouse=shipment_doc.warehouse,
+        customer=so.customer,
+        sales_order=so,
+        created_by=user,
+        notes=f'Возврат по отгрузке {shipment_doc.doc_number}. {reason}'.strip(),
+    )
+    customer_return = CustomerReturn.objects.create(
+        return_number=generate_payment_number('RET-C'),
+        idempotency_key=key,
+        sales_order=so,
+        shipment=shipment_doc,
+        warehouse_document=return_doc,
+        customer=so.customer,
+        account=acc,
+        refund_amount_kzt=refund_total,
+        reason=reason,
+        recorded_by=user,
+    )
+    for shipment_item, quantity, line_refund, line_cogs in lines:
+        WarehouseDocumentItem.objects.create(
+            document=return_doc,
+            product=shipment_item.product,
+            sales_order_item=shipment_item.sales_order_item,
+            quantity=quantity,
+            unit=shipment_item.unit,
+            unit_cost_kzt=shipment_item.unit_cost_kzt,
+            total_cost_kzt=line_cogs,
+            sale_unit_price_kzt=shipment_item.sale_unit_price_kzt,
+            costing_method=shipment_item.costing_method,
+            notes=f'Возврат по отгрузке {shipment_doc.doc_number}',
+        )
+        CustomerReturnItem.objects.create(
+            customer_return=customer_return,
+            shipment_item=shipment_item,
+            quantity=quantity,
+            refund_amount_kzt=line_refund,
+            cogs_amount_kzt=line_cogs,
+        )
+
+    post_document(return_doc, user=user)
+    acc.current_balance_kzt -= refund_total
+    acc.save(update_fields=['current_balance_kzt', 'updated_at'])
+    AuditLog.objects.create(
+        user=user,
+        action='POST_CUSTOMER_RETURN',
+        entity_type='CustomerReturn',
+        entity_id=str(customer_return.pk),
+        details={
+            'return_number': customer_return.return_number,
+            'sales_order': so.order_number,
+            'shipment': shipment_doc.doc_number,
+            'warehouse_document': return_doc.doc_number,
+            'refund_amount_kzt': str(refund_total),
+        },
+    )
+    return customer_return
+
+
+@transaction.atomic
+def storno_customer_return(customer_return: CustomerReturn, user: User, reason: str = '') -> CustomerReturn:
+    ret = CustomerReturn.objects.select_for_update().get(pk=customer_return.pk)
+    if ret.status == CustomerReturnStatus.CANCELLED:
+        raise ValidationError('Возврат уже был сторнирован ранее.')
+    acc = FinancialAccount.objects.select_for_update().get(pk=ret.account_id)
+    cancel_document(ret.warehouse_document, user=user)
+    acc.current_balance_kzt += ret.refund_amount_kzt
+    acc.save(update_fields=['current_balance_kzt', 'updated_at'])
+    ret.status = CustomerReturnStatus.CANCELLED
+    if reason:
+        ret.reason = f'{ret.reason}\n[Сторно: {reason}]'.strip()
+    ret.save(update_fields=['status', 'reason'])
+    AuditLog.objects.create(
+        user=user,
+        action='STORNO_CUSTOMER_RETURN',
+        entity_type='CustomerReturn',
+        entity_id=str(ret.pk),
+        details={'return_number': ret.return_number, 'reason': reason},
+    )
+    return ret
+
+
+def debt_aging(order, today=None) -> dict:
+    today = today or timezone.localdate()
+    debt = order.remaining_debt_kzt
+    due_date = order.payment_due_date
+    overdue_days = max((today - due_date).days, 0) if due_date and debt > Decimal('0.00') else 0
+    if debt <= Decimal('0.00'):
+        bucket = 'settled'
+    elif not due_date:
+        bucket = 'no_due_date'
+    elif overdue_days == 0:
+        bucket = 'not_due'
+    elif overdue_days <= 30:
+        bucket = '1_30'
+    elif overdue_days <= 60:
+        bucket = '31_60'
+    elif overdue_days <= 90:
+        bucket = '61_90'
+    else:
+        bucket = 'over_90'
+    return {
+        'due_date': due_date,
+        'overdue_days': overdue_days,
+        'is_overdue': overdue_days > 0,
+        'bucket': bucket,
+        'debt': debt,
+    }
+
+
+def sales_order_gross_profit(order: SalesOrder) -> dict:
+    shipments = order.warehouse_documents.filter(
+        doc_type=WarehouseDocumentType.SHIPMENT,
+        status=DocumentStatus.POSTED,
+    )
+    if not shipments.exists():
+        return {
+            'revenue_kzt': order.total_amount_kzt,
+            'cogs_kzt': order.total_cost_kzt,
+            'gross_profit_kzt': order.total_amount_kzt - order.total_cost_kzt,
+            'cost_basis': 'planned',
+        }
+
+    revenue = Decimal('0.00')
+    revenue_complete = True
+    for shipment_item in WarehouseDocumentItem.objects.filter(
+        document__in=shipments,
+        product__isnull=False,
+    ).select_related('sales_order_item'):
+        sale_unit_price = shipment_item.sale_unit_price_kzt
+        if sale_unit_price <= Decimal('0.00') and shipment_item.sales_order_item_id:
+            order_item = shipment_item.sales_order_item
+            sale_unit_price = (
+                order_item.unit_price_kzt
+                * (Decimal('100.00') - order_item.discount_percent)
+                * (Decimal('100.00') - order.discount_percent)
+                / Decimal('10000.00')
+            ).quantize(Decimal('0.01'))
+        if sale_unit_price <= Decimal('0.00'):
+            revenue_complete = False
+            break
+        revenue += (shipment_item.quantity * sale_unit_price).quantize(Decimal('0.01'))
+    if not revenue_complete:
+        revenue = order.total_amount_kzt
+    cogs = StockMovement.objects.filter(
+        document__in=shipments,
+        movement_type=MovementType.SHIPMENT,
+    ).aggregate(total=models.Sum('total_cost_kzt'))['total'] or Decimal('0.00')
+    posted_returns = order.customer_returns.filter(status=CustomerReturnStatus.POSTED)
+    refund = posted_returns.aggregate(total=models.Sum('refund_amount_kzt'))['total'] or Decimal('0.00')
+    returned_cogs = CustomerReturnItem.objects.filter(
+        customer_return__in=posted_returns
+    ).aggregate(total=models.Sum('cogs_amount_kzt'))['total'] or Decimal('0.00')
+    net_revenue = max(Decimal('0.00'), revenue - refund)
+    net_cogs = max(Decimal('0.00'), cogs - returned_cogs)
+    lines = WarehouseDocumentItem.objects.filter(
+        document__in=shipments,
+        product__isnull=False,
+    )
+    methods = set(lines.values_list('costing_method', flat=True))
+    basis = 'actual' if methods == {'ACTUAL'} else ('mixed' if methods else 'planned')
+    return {
+        'revenue_kzt': net_revenue,
+        'cogs_kzt': net_cogs,
+        'gross_profit_kzt': net_revenue - net_cogs,
+        'cost_basis': basis,
     }

@@ -65,6 +65,116 @@ def get_or_create_stock_balance(warehouse: Warehouse, material=None, product=Non
     return balance
 
 
+def calculate_finished_goods_cogs(warehouse: Warehouse, product, quantity: Decimal) -> tuple[Decimal, str]:
+    """Allocate WH-2 finished-goods cost by FIFO from posted movements."""
+    quantity = Decimal(str(quantity))
+    if quantity <= Decimal('0.000'):
+        raise ValidationError('Количество для расчёта себестоимости должно быть положительным.')
+
+    balance = get_or_create_stock_balance(warehouse, product=product, for_update=True)
+    movements = list(
+        StockMovement.objects.filter(
+            warehouse=warehouse,
+            product=product,
+            movement_type__in=[
+                MovementType.FINISHED_RECEIPT,
+                MovementType.SHIPMENT,
+                MovementType.CUSTOMER_RETURN,
+                MovementType.ADJUSTMENT,
+            ],
+        ).order_by('created_at', 'pk')
+    )
+
+    def movement_sign(movement):
+        if movement.movement_type in (MovementType.FINISHED_RECEIPT, MovementType.CUSTOMER_RETURN):
+            return Decimal('1.000')
+        if movement.movement_type == MovementType.SHIPMENT:
+            return Decimal('-1.000')
+        if 'Излишек' in movement.notes:
+            return Decimal('1.000')
+        if 'Недостача' in movement.notes:
+            return Decimal('-1.000')
+        if 'возврат отгрузки' in movement.notes.lower():
+            return Decimal('1.000')
+        if 'сторно приёмки' in movement.notes.lower() or 'сторно приемки' in movement.notes.lower():
+            return Decimal('-1.000')
+        return Decimal('0.000')
+
+    net_movement_quantity = sum(
+        (movement_sign(movement) * movement.quantity for movement in movements),
+        Decimal('0.000'),
+    )
+    opening_quantity = balance.current_stock - net_movement_quantity
+    if opening_quantity < Decimal('0.000'):
+        raise ValidationError(
+            f'Движения WH-2 по изделию «{product.name}» не согласуются с текущим остатком. '
+            'Сверьте склад до проведения отгрузки.'
+        )
+
+    layers = []
+    if opening_quantity:
+        opening_unit_cost = product.production_cost_kzt
+        if opening_unit_cost <= Decimal('0.00'):
+            raise ValidationError(
+                f'Для начального остатка изделия «{product.name}» нет фактической себестоимости. '
+                'Укажите себестоимость изделия или оформите приёмку с фактической стоимостью.'
+            )
+        layers.append([opening_quantity, opening_unit_cost, 'STANDARD'])
+
+    def consume_layers(requested):
+        remaining = requested
+        cost = Decimal('0.00')
+        sources = set()
+        for layer in layers:
+            if remaining <= Decimal('0.000'):
+                break
+            available, unit_cost, source = layer
+            used = min(available, remaining)
+            if used:
+                cost += used * unit_cost
+                layer[0] -= used
+                remaining -= used
+                sources.add(source)
+        if remaining > Decimal('0.000'):
+            raise ValidationError(
+                f'Недостаточно оценённых складских партий изделия «{product.name}» '
+                f'для расчёта себестоимости отгрузки ({remaining} шт. не оценено).'
+            )
+        return cost.quantize(Decimal('0.01')), sources
+
+    allocated_cost = Decimal('0.00')
+    allocated_sources = set()
+    for movement in movements:
+        if movement.movement_type in (MovementType.FINISHED_RECEIPT, MovementType.CUSTOMER_RETURN):
+            if movement.unit_cost_kzt <= Decimal('0.00'):
+                raise ValidationError(
+                    f'Складское движение {movement.movement_number} не содержит положительной себестоимости.'
+                )
+            source = 'ACTUAL' if movement.movement_type == MovementType.FINISHED_RECEIPT else 'MIXED'
+            layers.append([movement.quantity, movement.unit_cost_kzt, source])
+        elif movement.movement_type == MovementType.SHIPMENT:
+            consume_layers(movement.quantity)
+        elif movement.movement_type == MovementType.ADJUSTMENT:
+            sign = movement_sign(movement)
+            if sign > 0:
+                if movement.unit_cost_kzt <= Decimal('0.00'):
+                    raise ValidationError(
+                        f'Складское движение {movement.movement_number} не содержит стоимости излишка.'
+                    )
+                layers.append([movement.quantity, movement.unit_cost_kzt, 'MIXED'])
+            elif sign < 0:
+                consume_layers(movement.quantity)
+
+    allocated_cost, allocated_sources = consume_layers(quantity)
+    if allocated_sources == {'ACTUAL'}:
+        costing_method = 'ACTUAL'
+    elif allocated_sources == {'STANDARD'}:
+        costing_method = 'STANDARD'
+    else:
+        costing_method = 'MIXED'
+    return allocated_cost, costing_method
+
+
 def post_document(document: WarehouseDocument, user=None) -> WarehouseDocument:
     """
     Транзакционное проведение складского документа с блокировкой остатков (select_for_update).

@@ -38,6 +38,11 @@ urlpatterns = [
     path('receivables/', views.receivables_list, name='receivables'),
     path('payables/', views.payables_list, name='payables'),
 
+    # Возвраты покупателей
+    path('returns/', views.customer_return_list, name='customer_returns'),
+    path('returns/create/', views.customer_return_create, name='customer_return_create'),
+    path('returns/<uuid:pk>/storno/', views.customer_return_storno, name='customer_return_storno'),
+
     # Себестоимость производства
     path('costing/', views.cost_accounting_view, name='order_costs'),
 

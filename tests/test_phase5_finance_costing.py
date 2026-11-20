@@ -1,4 +1,5 @@
 import pytest
+import datetime
 from decimal import Decimal
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -16,7 +17,9 @@ from apps.warehouses.models import (
 from apps.production.models import ProductionOrder, ProductionOrderStatus, BOM, BOMItem
 from apps.finance.models import (
     FinancialAccount, AccountType, CustomerPayment, SupplierPayment,
-    AccountTransfer, Expense, ExpenseCategory, PaymentMethod, PaymentStatus
+    AccountTransfer, Expense, ExpenseCategory, PaymentMethod, PaymentStatus,
+    GeneralIncome, IncomeCategory,
+    CustomerReturn,
 )
 from apps.finance.services import (
     ensure_default_accounts,
@@ -27,6 +30,13 @@ from apps.finance.services import (
     transfer_between_accounts,
     record_expense,
     storno_expense,
+    record_general_income,
+    storno_general_income,
+    storno_account_transfer,
+    record_customer_return,
+    storno_customer_return,
+    debt_aging,
+    sales_order_gross_profit,
     calculate_production_order_actual_cost,
     get_financial_dashboard_kpis,
 )
@@ -35,6 +45,10 @@ from apps.finance.reports import (
     generate_supplier_payment_pdf,
     export_financial_excel,
 )
+from apps.sales.services import ship_sales_order
+from openpyxl import load_workbook
+from io import BytesIO
+import uuid
 
 
 @pytest.fixture
@@ -111,7 +125,12 @@ def finance_setup(db):
     )
     product, _ = Product.objects.get_or_create(
         sku='PROD-P5-DESK',
-        defaults={'name': 'Стол письменный Loft-120', 'category': ProductCategory.TABLE, 'sale_price_kzt': Decimal('45000.00')}
+        defaults={
+            'name': 'Стол письменный Loft-120',
+            'category': ProductCategory.TABLE,
+            'sale_price_kzt': Decimal('45000.00'),
+            'production_cost_kzt': Decimal('30000.00'),
+        }
     )
 
     # BOM
@@ -312,6 +331,24 @@ def test_expense_registration_with_account(finance_setup):
     assert expense.pk is not None
     assert expense.is_storno is False
     assert setup['cash_acc'].balance_kzt == initial_balance - Decimal('120000.00')
+
+
+@pytest.mark.django_db
+def test_unpaid_expense_is_not_counted_as_cash_outflow(finance_setup):
+    setup = finance_setup
+    expense = record_expense(
+        category=ExpenseCategory.OFFICE,
+        amount_kzt=Decimal('12500.00'),
+        description='Счёт к оплате',
+        recorded_by=setup['accountant'],
+    )
+
+    kpis = get_financial_dashboard_kpis()
+
+    assert expense.account_id is None
+    assert kpis['general_expenses'] == Decimal('12500.00')
+    assert kpis['cash_expenses_paid_kzt'] == Decimal('0.00')
+    assert kpis['cash_outflow_kzt'] == Decimal('0.00')
 
 
 @pytest.mark.django_db
@@ -574,3 +611,395 @@ def test_report_generation_pdf_and_excel(finance_setup):
     # 5. Excel Receivables export
     excel_rec = export_financial_excel('receivables')
     assert len(excel_rec) > 1000
+
+
+@pytest.mark.django_db
+def test_finance_exports_and_return_routes_enforce_rbac(finance_setup):
+    setup = finance_setup
+    payment = register_customer_payment(
+        amount_kzt=Decimal('50000.00'),
+        sales_order=setup['sales_order'],
+        account=setup['bank_acc'],
+        created_by=setup['accountant'],
+    )
+    client = Client()
+    client.force_login(setup['accountant'])
+
+    pdf_response = client.get('/finance/export/pdf/')
+    excel_response = client.get('/finance/export/excel/?type=profitability')
+    payment_pdf_response = client.get(f'/finance/payments/customers/{payment.pk}/pdf/')
+    assert pdf_response.status_code == 200
+    assert pdf_response['Content-Type'] == 'application/pdf'
+    assert pdf_response.content.startswith(b'%PDF')
+    assert excel_response.status_code == 200
+    assert excel_response['Content-Type'].startswith(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    assert excel_response.content.startswith(b'PK')
+    assert payment_pdf_response.status_code == 200
+    assert payment_pdf_response.content.startswith(b'%PDF')
+
+    client.force_login(setup['worker'])
+    assert client.get('/finance/export/pdf/').status_code == 302
+    assert client.get('/finance/export/excel/?type=profitability').status_code == 302
+    assert client.get('/finance/returns/create/').status_code == 302
+
+
+@pytest.mark.django_db
+def test_customer_payment_idempotency(finance_setup):
+    setup = finance_setup
+    key = uuid.uuid4()
+    arguments = {
+        'amount_kzt': Decimal('12500.25'),
+        'sales_order': setup['sales_order'],
+        'account': setup['bank_acc'],
+        'user': setup['accountant'],
+        'idempotency_key': key,
+    }
+
+    payment = register_customer_payment(**arguments)
+    replay = register_customer_payment(**arguments)
+
+    setup['bank_acc'].refresh_from_db()
+    assert replay.pk == payment.pk
+    assert CustomerPayment.objects.filter(idempotency_key=key).count() == 1
+    assert setup['bank_acc'].current_balance_kzt == Decimal('5012500.25')
+    with pytest.raises(ValidationError):
+        register_customer_payment(**{**arguments, 'amount_kzt': Decimal('12500.26')})
+
+
+@pytest.mark.django_db
+def test_general_income_and_account_transfer_storno(finance_setup):
+    setup = finance_setup
+    initial_balance = setup['bank_acc'].current_balance_kzt
+    income = record_general_income(
+        category=IncomeCategory.SERVICES,
+        amount_kzt=Decimal('10000.00'),
+        account=setup['bank_acc'],
+        description='Установка мебели',
+        user=setup['accountant'],
+    )
+    setup['bank_acc'].refresh_from_db()
+    assert setup['bank_acc'].current_balance_kzt == initial_balance + Decimal('10000.00')
+    storno_general_income(income, setup['accountant'], 'Возврат клиенту')
+    setup['bank_acc'].refresh_from_db()
+    income.refresh_from_db()
+    assert income.is_storno
+    assert setup['bank_acc'].current_balance_kzt == initial_balance
+
+    transfer = transfer_between_accounts(
+        from_account=setup['cash_acc'],
+        to_account=setup['bank_acc'],
+        amount_kzt=Decimal('20000.00'),
+        user=setup['accountant'],
+    )
+    storno_account_transfer(transfer, setup['accountant'], 'Ошибка перевода')
+    setup['cash_acc'].refresh_from_db()
+    setup['bank_acc'].refresh_from_db()
+    transfer.refresh_from_db()
+    assert transfer.status == PaymentStatus.CANCELLED
+    assert setup['cash_acc'].current_balance_kzt == Decimal('1000000.00')
+    assert setup['bank_acc'].current_balance_kzt == initial_balance
+    with pytest.raises(ValidationError):
+        storno_account_transfer(transfer, setup['accountant'])
+
+
+@pytest.mark.django_db
+def test_production_returns_reduce_cost_without_creating_movements(finance_setup):
+    setup = finance_setup
+    order = setup['prod_order']
+    issue = WarehouseDocument.objects.create(
+        doc_number='DOC-ISSUE-RETURN-COST',
+        doc_type=WarehouseDocumentType.PRODUCTION_ISSUE,
+        warehouse=setup['wh1'],
+        status=DocumentStatus.POSTED,
+        production_order=order,
+        created_by=setup['owner'],
+    )
+    returned = WarehouseDocument.objects.create(
+        doc_number='DOC-RETURN-COST',
+        doc_type=WarehouseDocumentType.PRODUCTION_RETURN,
+        warehouse=setup['wh1'],
+        status=DocumentStatus.POSTED,
+        production_order=order,
+        created_by=setup['owner'],
+    )
+    StockMovement.objects.create(
+        movement_number='MOV-ISSUE-RETURN-COST',
+        document=issue,
+        material=setup['material'],
+        movement_type=MovementType.ISSUE,
+        quantity=Decimal('10.000'),
+        unit_cost_kzt=Decimal('12000.00'),
+        total_cost_kzt=Decimal('120000.00'),
+        warehouse=setup['wh1'],
+    )
+    StockMovement.objects.create(
+        movement_number='MOV-RETURN-COST',
+        document=returned,
+        material=setup['material'],
+        movement_type=MovementType.PRODUCTION_RETURN,
+        quantity=Decimal('2.000'),
+        unit_cost_kzt=Decimal('12000.00'),
+        total_cost_kzt=Decimal('24000.00'),
+        warehouse=setup['wh1'],
+    )
+    before_count = StockMovement.objects.count()
+
+    cost = calculate_production_order_actual_cost(order)
+
+    assert cost['actual_materials_cost_kzt'] == Decimal('96000.00')
+    assert cost['total_actual_cost_kzt'] == Decimal('131000.00')
+    assert StockMovement.objects.count() == before_count
+
+
+@pytest.mark.django_db
+def test_financial_pdf_view_and_excel_report_types(finance_setup):
+    client = Client()
+    client.force_login(finance_setup['accountant'])
+
+    response = client.get('/finance/export/pdf/')
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/pdf'
+    assert response.content.startswith(b'%PDF')
+
+    for report_type in ('payments', 'income_expenses', 'profitability', 'costing'):
+        content = export_financial_excel(report_type)
+        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+        assert workbook.active.max_row >= 4
+        workbook.close()
+
+
+@pytest.mark.django_db
+def test_payment_due_dates_overdue_and_age_buckets(finance_setup):
+    setup = finance_setup
+    today = timezone.localdate()
+    setup['sales_order'].payment_due_date = today - datetime.timedelta(days=45)
+    setup['sales_order'].save(update_fields=['payment_due_date'])
+
+    setup['purchase_order'].payment_due_date = today - datetime.timedelta(days=95)
+    setup['purchase_order'].save(update_fields=['payment_due_date'])
+
+    receivable = debt_aging(setup['sales_order'], today=today)
+    payable = debt_aging(setup['purchase_order'], today=today)
+
+    assert receivable['is_overdue'] is True
+    assert receivable['bucket'] == '31_60'
+    assert payable['is_overdue'] is True
+    assert payable['bucket'] == 'over_90'
+
+
+@pytest.mark.django_db
+def test_actual_shipment_cogs_and_gross_profit(finance_setup):
+    setup = finance_setup
+    item = SalesOrderItem.objects.create(
+        order=setup['sales_order'],
+        product=setup['product'],
+        quantity=Decimal('2.00'),
+        unit_price_kzt=Decimal('50000.00'),
+        total_price_kzt=Decimal('100000.00'),
+    )
+    setup['sales_order'].recalculate_totals()
+    setup['sales_order'].status = OrderStatus.CONFIRMED
+    setup['sales_order'].save(update_fields=['status'])
+
+    balance = StockBalance.objects.get_or_create(
+        warehouse=setup['wh2'],
+        product=setup['product'],
+        defaults={'current_stock': Decimal('0.000')},
+    )[0]
+    balance.current_stock = Decimal('5.000')
+    balance.save(update_fields=['current_stock'])
+
+    shipment = ship_sales_order(
+        setup['sales_order'],
+        {item.id: Decimal('2.000')},
+        user=setup['accountant'],
+    )
+    shipment_line = shipment.items.get(product=setup['product'])
+
+    assert shipment_line.unit_cost_kzt == setup['product'].production_cost_kzt
+    gross = sales_order_gross_profit(setup['sales_order'])
+    assert gross['cost_basis'] in ('ACTUAL'.lower(), 'mixed', 'standard')
+    assert gross['revenue_kzt'] == Decimal('100000.00')
+    assert gross['cogs_kzt'] > Decimal('0.00')
+    assert gross['gross_profit_kzt'] == gross['revenue_kzt'] - gross['cogs_kzt']
+
+
+@pytest.mark.django_db
+def test_partial_customer_return_storno_and_idempotency(finance_setup):
+    setup = finance_setup
+    item = SalesOrderItem.objects.create(
+        order=setup['sales_order'],
+        product=setup['product'],
+        quantity=Decimal('2.00'),
+        unit_price_kzt=Decimal('50000.00'),
+        total_price_kzt=Decimal('100000.00'),
+    )
+    setup['sales_order'].recalculate_totals()
+    setup['sales_order'].status = OrderStatus.CONFIRMED
+    setup['sales_order'].save(update_fields=['status'])
+    balance = StockBalance.objects.get_or_create(
+        warehouse=setup['wh2'],
+        product=setup['product'],
+        defaults={'current_stock': Decimal('0.000')},
+    )[0]
+    balance.current_stock = Decimal('5.000')
+    balance.save(update_fields=['current_stock'])
+
+    shipment = ship_sales_order(
+        setup['sales_order'],
+        {item.id: Decimal('2.000')},
+        user=setup['accountant'],
+    )
+    shipment_line = shipment.items.get(product=setup['product'])
+    register_customer_payment(
+        amount_kzt=Decimal('100000.00'),
+        sales_order=setup['sales_order'],
+        account=setup['bank_acc'],
+        created_by=setup['accountant'],
+    )
+    setup['bank_acc'].refresh_from_db()
+    account_before = setup['bank_acc'].current_balance_kzt
+    key = uuid.uuid4()
+
+    ret = record_customer_return(
+        sales_order=setup['sales_order'],
+        shipment=shipment,
+        account=setup['bank_acc'],
+        returned_items={shipment_line.pk: Decimal('1.000')},
+        user=setup['accountant'],
+        reason='Частичный возврат',
+        idempotency_key=key,
+    )
+    setup['bank_acc'].refresh_from_db()
+    return_movement = StockMovement.objects.filter(
+        document=ret.warehouse_document,
+        movement_type=MovementType.CUSTOMER_RETURN,
+    ).first()
+    assert ret.refund_amount_kzt == Decimal('50000.00')
+    assert return_movement.quantity == Decimal('1.000')
+    assert setup['bank_acc'].current_balance_kzt == account_before - Decimal('50000.00')
+    return_kpis = get_financial_dashboard_kpis()
+    assert return_kpis['customer_refunds_kzt'] == Decimal('50000.00')
+    assert return_kpis['cash_outflow_kzt'] == Decimal('50000.00')
+    assert return_kpis['accrual_revenue_kzt'] == Decimal('50000.00')
+    balance.refresh_from_db()
+    assert balance.current_stock == Decimal('4.000')
+
+    replay = record_customer_return(
+        sales_order=setup['sales_order'],
+        shipment=shipment,
+        account=setup['bank_acc'],
+        returned_items={shipment_line.pk: Decimal('1.000')},
+        user=setup['accountant'],
+        reason='Частичный возврат',
+        idempotency_key=key,
+    )
+    assert replay.pk == ret.pk
+    assert CustomerReturn.objects.filter(idempotency_key=key).count() == 1
+    with pytest.raises(ValidationError):
+        record_customer_return(
+            sales_order=setup['sales_order'],
+            shipment=shipment,
+            account=setup['bank_acc'],
+            returned_items={shipment_line.pk: Decimal('2.000')},
+            user=setup['accountant'],
+            reason='Частичный возврат',
+            idempotency_key=key,
+        )
+
+    storno_customer_return(ret, setup['accountant'], 'Ошибка возврата')
+    ret.refresh_from_db()
+    setup['bank_acc'].refresh_from_db()
+    assert ret.status == 'CANCELLED'
+    assert setup['bank_acc'].current_balance_kzt == account_before
+    reversed_kpis = get_financial_dashboard_kpis()
+    assert reversed_kpis['customer_refunds_kzt'] == Decimal('0.00')
+    assert reversed_kpis['accrual_revenue_kzt'] == Decimal('100000.00')
+    balance.refresh_from_db()
+    assert balance.current_stock == Decimal('3.000')
+    with pytest.raises(ValidationError):
+        record_customer_return(
+            sales_order=setup['sales_order'],
+            shipment=shipment,
+            account=setup['bank_acc'],
+            returned_items={shipment_line.pk: Decimal('1.000')},
+            user=setup['accountant'],
+            reason='Частичный возврат',
+            idempotency_key=key,
+        )
+
+
+@pytest.mark.django_db
+def test_customer_return_cannot_exceed_paid_amount(finance_setup):
+    setup = finance_setup
+    item = SalesOrderItem.objects.create(
+        order=setup['sales_order'],
+        product=setup['product'],
+        quantity=Decimal('1.00'),
+        unit_price_kzt=Decimal('50000.00'),
+        total_price_kzt=Decimal('50000.00'),
+    )
+    setup['sales_order'].recalculate_totals()
+    setup['sales_order'].status = OrderStatus.CONFIRMED
+    setup['sales_order'].save(update_fields=['status'])
+    balance = StockBalance.objects.get_or_create(
+        warehouse=setup['wh2'],
+        product=setup['product'],
+        defaults={'current_stock': Decimal('0.000')},
+    )[0]
+    balance.current_stock = Decimal('2.000')
+    balance.save(update_fields=['current_stock'])
+    shipment = ship_sales_order(
+        setup['sales_order'],
+        {item.id: Decimal('1.000')},
+        user=setup['accountant'],
+    )
+    with pytest.raises(ValidationError, match='фактически оплаченную сумму'):
+        record_customer_return(
+            sales_order=setup['sales_order'],
+            shipment=shipment,
+            account=setup['bank_acc'],
+            returned_items={shipment.items.get(product=setup['product']).pk: Decimal('1.000')},
+            user=setup['accountant'],
+            idempotency_key=uuid.uuid4(),
+        )
+
+
+@pytest.mark.django_db
+def test_customer_return_rejects_quantity_over_shipment(finance_setup):
+    setup = finance_setup
+    item = SalesOrderItem.objects.create(
+        order=setup['sales_order'],
+        product=setup['product'],
+        quantity=Decimal('1.00'),
+        unit_price_kzt=Decimal('50000.00'),
+        total_price_kzt=Decimal('50000.00'),
+    )
+    setup['sales_order'].recalculate_totals()
+    setup['sales_order'].status = OrderStatus.CONFIRMED
+    setup['sales_order'].save(update_fields=['status'])
+    balance = StockBalance.objects.get_or_create(
+        warehouse=setup['wh2'],
+        product=setup['product'],
+        defaults={'current_stock': Decimal('0.000')},
+    )[0]
+    balance.current_stock = Decimal('3.000')
+    balance.save(update_fields=['current_stock'])
+    shipment = ship_sales_order(
+        setup['sales_order'],
+        {item.id: Decimal('1.000')},
+        user=setup['accountant'],
+    )
+    shipment_line = shipment.items.get(product=setup['product'])
+
+    with pytest.raises(ValidationError):
+        record_customer_return(
+            sales_order=setup['sales_order'],
+            shipment=shipment,
+            account=setup['bank_acc'],
+            returned_items={shipment_line.pk: Decimal('2.000')},
+            user=setup['accountant'],
+            idempotency_key=uuid.uuid4(),
+        )

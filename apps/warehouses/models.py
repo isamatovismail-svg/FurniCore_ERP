@@ -185,12 +185,29 @@ class WarehouseDocumentItem(models.Model):
     product = models.ForeignKey(
         'products.Product', on_delete=models.PROTECT, null=True, blank=True, verbose_name='Изделие'
     )
+    sales_order_item = models.ForeignKey(
+        'sales.SalesOrderItem', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='shipment_document_items', verbose_name='Строка заказа покупателя',
+    )
     quantity = models.DecimalField(
         max_digits=14, decimal_places=3, default=Decimal('1.000'), verbose_name='Количество'
     )
     unit = models.CharField(max_length=30, default='шт', verbose_name='Единица')
     unit_cost_kzt = models.DecimalField(
         max_digits=16, decimal_places=2, default=Decimal('0.00'), verbose_name='Цена за ед. (KZT)'
+    )
+    sale_unit_price_kzt = models.DecimalField(
+        max_digits=16, decimal_places=2, default=Decimal('0.00'),
+        verbose_name='Цена продажи за единицу (KZT)',
+    )
+    costing_method = models.CharField(
+        max_length=20, blank=True,
+        choices=[
+            ('ACTUAL', 'Фактические складские слои'),
+            ('STANDARD', 'Нормативная стоимость начального остатка'),
+            ('MIXED', 'Смешанная стоимость'),
+        ],
+        verbose_name='Основа себестоимости',
     )
     total_cost_kzt = models.DecimalField(
         max_digits=16, decimal_places=2, default=Decimal('0.00'), verbose_name='Сумма (KZT)'

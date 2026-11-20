@@ -22,7 +22,12 @@ from apps.warehouses.models import (
     DocumentStatus,
     StockBalance,
 )
-from apps.warehouses.services import generate_doc_number, post_document, get_or_create_stock_balance
+from apps.warehouses.services import (
+    generate_doc_number,
+    post_document,
+    get_or_create_stock_balance,
+    calculate_finished_goods_cogs,
+)
 from apps.notifications.services import (
     notify_new_sales_order,
     notify_waiting_production,
@@ -47,6 +52,7 @@ def create_sales_order(
     notes: str = '',
     discount_percent: Decimal = Decimal('0.00'),
     deposit_amount_kzt: Decimal = Decimal('0.00'),
+    payment_due_date=None,
 ) -> SalesOrder:
     """Создание заказа покупателя в статусе DRAFT."""
     if not customer.is_active:
@@ -57,6 +63,7 @@ def create_sales_order(
         customer=customer,
         status=OrderStatus.DRAFT,
         planned_delivery_date=planned_delivery_date,
+        payment_due_date=payment_due_date,
         delivery_address=delivery_address or customer.address,
         notes=notes,
         discount_percent=Decimal(str(discount_percent or '0.00')),
@@ -392,12 +399,28 @@ def ship_sales_order(
                 f'В наличии: {balance.current_stock} шт., запрошено к отгрузке: {qty} шт.'
             )
 
-        line_amount = (qty * item.unit_price_kzt * (Decimal('100.00') - item.discount_percent) / Decimal('100.00')).quantize(Decimal('0.01'))
+        item_net_price = item.unit_price_kzt * (Decimal('100.00') - item.discount_percent) / Decimal('100.00')
+        line_amount = (
+            qty * item_net_price * (Decimal('100.00') - so.discount_percent) / Decimal('100.00')
+        ).quantize(Decimal('0.01'))
         total_shipped_amount += line_amount
-        items_to_process.append((item, qty, line_amount))
+        sale_unit_price = (line_amount / qty).quantize(Decimal('0.01'))
+        items_to_process.append((item, qty, line_amount, sale_unit_price))
 
     if not items_to_process:
         raise ValidationError('Не указано ни одно количество изделий для отгрузки.')
+
+    quantities_by_product = {}
+    for item, qty, _, _ in items_to_process:
+        quantities_by_product[item.product_id] = quantities_by_product.get(
+            item.product_id, Decimal('0.000')
+        ) + qty
+    cogs_by_product = {}
+    for item, qty, _, _ in items_to_process:
+        if item.product_id not in cogs_by_product:
+            cogs_by_product[item.product_id] = calculate_finished_goods_cogs(
+                wh2, item.product, quantities_by_product[item.product_id]
+            )
 
     # Формируем документ SHIPMENT на WH-2
     doc_number = generate_doc_number(WarehouseDocumentType.SHIPMENT)
@@ -414,14 +437,30 @@ def ship_sales_order(
         notes=f'Отгрузка по клиентскому заказу {so.order_number}. {doc_notes}'.strip(),
     )
 
-    for item, qty, cost in items_to_process:
+    cost_distributed = {}
+    quantity_distributed = {}
+    for item, qty, _, sale_unit_price in items_to_process:
+        product_cost_total, costing_method = cogs_by_product[item.product_id]
+        product_qty_total = quantities_by_product[item.product_id]
+        already_distributed = cost_distributed.get(item.product_id, Decimal('0.00'))
+        already_quantity = quantity_distributed.get(item.product_id, Decimal('0.000'))
+        if already_quantity + qty == product_qty_total:
+            line_cost = product_cost_total - already_distributed
+        else:
+            line_cost = (product_cost_total * qty / product_qty_total).quantize(Decimal('0.01'))
+        cost_distributed[item.product_id] = already_distributed + line_cost
+        quantity_distributed[item.product_id] = already_quantity + qty
+        unit_cost = (line_cost / qty).quantize(Decimal('0.01'))
         WarehouseDocumentItem.objects.create(
             document=shipment_doc,
             product=item.product,
+            sales_order_item=item,
             quantity=qty,
             unit='шт',
-            unit_cost_kzt=item.unit_price_kzt,
-            total_cost_kzt=cost,
+            unit_cost_kzt=unit_cost,
+            total_cost_kzt=line_cost,
+            sale_unit_price_kzt=sale_unit_price,
+            costing_method=costing_method,
             notes=f'Заказ {so.order_number}',
         )
         item.shipped_quantity += qty
@@ -450,7 +489,8 @@ def ship_sales_order(
         details={
             'doc_number': shipment_doc.doc_number,
             'sales_order': so.order_number,
-            'total_amount': float(total_shipped_amount),
+            'total_amount': str(total_shipped_amount),
+            'cogs_kzt': str(sum((cost for cost, _ in cogs_by_product.values()), Decimal('0.00'))),
             'order_status': so.status,
         },
     )
