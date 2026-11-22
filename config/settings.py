@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -17,15 +18,27 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('SECRET_KEY environment variable is required in production mode (DEBUG=False)!')
     SECRET_KEY = 'furnicore-default-development-secret-key-change-in-prod'
 
-allowed_hosts_raw = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,testserver,.trycloudflare.com')
+allowed_hosts_raw = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,testserver,.trycloudflare.com,.onrender.com')
 ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_raw.split(',') if h.strip()]
-if '.trycloudflare.com' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('.trycloudflare.com')
+for default_host in ('.trycloudflare.com', '.onrender.com'):
+    if default_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(default_host)
 
-csrf_origins_raw = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.trycloudflare.com')
+# Render external hostname support
+RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+csrf_origins_raw = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.trycloudflare.com,https://*.onrender.com')
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in csrf_origins_raw.split(',') if o.strip()]
-if 'https://*.trycloudflare.com' not in CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS.append('https://*.trycloudflare.com')
+for default_origin in ('https://*.trycloudflare.com', 'https://*.onrender.com'):
+    if default_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(default_origin)
+
+if RENDER_EXTERNAL_HOSTNAME:
+    render_origin = f'https://{RENDER_EXTERNAL_HOSTNAME}'
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
 
 # Application definition
 INSTALLED_APPS = [
@@ -59,6 +72,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -93,24 +107,34 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Database configuration (PostgreSQL 16)
-DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.postgresql')
-DB_NAME = os.getenv('DB_NAME', 'furnicore_db')
-DB_USER = os.getenv('DB_USER', 'furnicore_user')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'furnicore_password_2026')
-DB_HOST = os.getenv('DB_HOST', '127.0.0.1')
-DB_PORT = os.getenv('DB_PORT', '5435')
-
-DATABASES = {
-    'default': {
-        'ENGINE': DB_ENGINE,
-        'NAME': DB_NAME,
-        'USER': DB_USER,
-        'PASSWORD': DB_PASSWORD,
-        'HOST': DB_HOST,
-        'PORT': DB_PORT,
-        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '600')),
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=int(os.getenv('DB_CONN_MAX_AGE', '600')),
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.postgresql')
+    DB_NAME = os.getenv('DB_NAME', 'furnicore_db')
+    DB_USER = os.getenv('DB_USER', 'furnicore_user')
+    DB_PASSWORD = os.getenv('DB_PASSWORD', 'furnicore_password_2026')
+    DB_HOST = os.getenv('DB_HOST', '127.0.0.1')
+    DB_PORT = os.getenv('DB_PORT', '5435')
+
+    DATABASES = {
+        'default': {
+            'ENGINE': DB_ENGINE,
+            'NAME': DB_NAME,
+            'USER': DB_USER,
+            'PASSWORD': DB_PASSWORD,
+            'HOST': DB_HOST,
+            'PORT': DB_PORT,
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '600')),
+        }
+    }
 
 # Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
@@ -133,6 +157,15 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
