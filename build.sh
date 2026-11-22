@@ -12,6 +12,9 @@ python manage.py collectstatic --no-input
 echo "==> Applying database migrations..."
 python manage.py migrate
 
+# Create/update the presentation administrator only when its secret is configured.
+python manage.py ensure_presentation_admin
+
 # Optional: seed demo data if explicitly requested in environment
 if [ "${SEED_DEMO:-false}" = "true" ] || [ "${SEED_DEMO:-false}" = "1" ]; then
     echo "==> Seeding demo data (SEED_DEMO=true)..."
