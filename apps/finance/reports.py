@@ -16,13 +16,17 @@ from openpyxl.utils import get_column_letter
 FONT_REGULAR = 'Helvetica'
 FONT_BOLD = 'Helvetica-Bold'
 font_paths = [
-    ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
     ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+    ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
 ]
 for reg_path, bold_path in font_paths:
     if os.path.exists(reg_path) and os.path.exists(bold_path):
-        pdfmetrics.registerFont(TTFont('CyrillicFont', reg_path))
-        pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', bold_path))
+        regular_font = TTFont('CyrillicFont', reg_path)
+        bold_font = TTFont('CyrillicFont-Bold', bold_path)
+        if ord('₸') not in regular_font.face.charWidths or ord('₸') not in bold_font.face.charWidths:
+            continue
+        pdfmetrics.registerFont(regular_font)
+        pdfmetrics.registerFont(bold_font)
         FONT_REGULAR = 'CyrillicFont'
         FONT_BOLD = 'CyrillicFont-Bold'
         break
@@ -31,7 +35,7 @@ for reg_path, bold_path in font_paths:
 def _require_cyrillic_pdf_font():
     if FONT_REGULAR == 'Helvetica':
         raise RuntimeError(
-            'Для формирования PDF с кириллицей установите Liberation Sans или DejaVu Sans.'
+            'Для формирования PDF с кириллицей и знаком ₸ установите DejaVu Sans или совместимый шрифт.'
         )
 
 

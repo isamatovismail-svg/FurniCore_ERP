@@ -13,9 +13,9 @@ The committed Phase 5 work includes customer and supplier payment flows, transfe
 | `apps/finance/models.py` | Restored the existing `OFFICE` expense category. |
 | `apps/finance/migrations/0005_alter_expense_category.py` | Added and applied the category migration. |
 | `apps/finance/services.py` | Preserved duplicate-payment protection for rapid repeated submissions; allowed an expense to be recorded without a cash account until payment; improved plan/actual production-cost calculations using existing BOM, posted warehouse issue/return movements, recorded labor, and existing waste data. No warehouse movement is created or edited by Finance. |
-| `apps/finance/reports.py` | Kept monetary values as `Decimal` in Excel output rather than converting to binary floats. |
+| `apps/finance/reports.py` | Kept monetary values as `Decimal` in Excel output rather than converting to binary floats; added DejaVu Sans prioritizing to guarantee native rendering of the tenge symbol (`₸`, U+20B8) in Cyrillic PDF receipts. |
 | `templates/finance/expenses/expense_form.html` | Made account selection optional for an expense not yet paid. |
-| `tests/test_phase5_finance_costing.py` | Added regression coverage for idempotent submission, storno, production returns, PDF output, and Excel exports. |
+| `tests/test_phase5_finance_costing.py` | Added regression coverage for idempotent submission, storno, production returns, PDF output with `₸` symbol verification, and Excel exports. |
 | `phase5_progress.md` | Updated the progress record and remaining limitations. |
 | `phase5_finance_report.md` | Added this report. |
 

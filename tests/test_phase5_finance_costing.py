@@ -41,10 +41,12 @@ from apps.finance.services import (
     get_financial_dashboard_kpis,
 )
 from apps.finance.reports import (
+    FONT_REGULAR,
     generate_customer_payment_pdf,
     generate_supplier_payment_pdf,
     export_financial_excel,
 )
+from reportlab.pdfbase import pdfmetrics
 from apps.sales.services import ship_sales_order
 from openpyxl import load_workbook
 from io import BytesIO
@@ -584,6 +586,7 @@ def test_report_generation_pdf_and_excel(finance_setup):
     pdf_bytes = generate_customer_payment_pdf(payment)
     assert len(pdf_bytes) > 1000
     assert pdf_bytes.startswith(b'%PDF')
+    assert ord('₸') in pdfmetrics.getFont(FONT_REGULAR).face.charWidths
 
     # 2. Supplier Payment PDF
     supp_payment = register_supplier_payment(
@@ -639,8 +642,15 @@ def test_finance_exports_and_return_routes_enforce_rbac(finance_setup):
     assert payment_pdf_response.status_code == 200
     assert payment_pdf_response.content.startswith(b'%PDF')
 
+    client.logout()
+    anonymous_response = client.get('/finance/export/pdf/')
+    assert anonymous_response.status_code == 302
+    assert '/accounts/login/' in anonymous_response.headers['Location']
+
     client.force_login(setup['worker'])
-    assert client.get('/finance/export/pdf/').status_code == 302
+    denied_pdf_response = client.get('/finance/export/pdf/')
+    assert denied_pdf_response.status_code == 302
+    assert denied_pdf_response.headers['Location'] == '/'
     assert client.get('/finance/export/excel/?type=profitability').status_code == 302
     assert client.get('/finance/returns/create/').status_code == 302
 
