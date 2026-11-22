@@ -4,7 +4,7 @@
 **Проект:** FurniCore ERP (Модульная ERP-система мебельного производства)  
 **Репозиторий:** [https://github.com/isamatovismail-svg/FurniCore_ERP](https://github.com/isamatovismail-svg/FurniCore_ERP)  
 **Ветка релиза:** `python-django`  
-**Commit SHA:** `f727f2ad9b06861dd6211e25fd6228f4f719a209`  
+**Commit SHA:** `7772bb8323fdd15d6bdaacfdab574131cd4f3568`  
 **Сообщение коммита:** `docs(release): update README, phase5 finance report, and finalize test suite for GitHub release`  
 **Статус публикации:** ✅ **Успешно отправлено в origin/python-django**
 
