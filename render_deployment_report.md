@@ -4,7 +4,7 @@
 **Проект:** FurniCore ERP (Модульная ERP-система мебельного производства)  
 **Репозиторий:** [https://github.com/isamatovismail-svg/FurniCore_ERP](https://github.com/isamatovismail-svg/FurniCore_ERP)  
 **Ветка:** `python-django`  
-**Commit SHA:** `228ef05b4ee689fb8f5eeb72f62cb96229c9dfa5`  
+**Commit SHA:** `e2b851f2376ea8a84e47359effa0abbf41b8c66d`  
 **Целевая платформа:** Render.com (Web Service — Free Tier)  
 **Статус готовности:** ✅ **100% готов к безопасному подключению в Render**
 
