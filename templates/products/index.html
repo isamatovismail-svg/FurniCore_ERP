@@ -44,24 +44,21 @@
         {{ p.get_category_display }}
       </div>
       {% else %}
-      <div class="w-full h-full flex items-center justify-center" style="background:linear-gradient(135deg,#E8F0EE,#C5D8D4);">
-        <div class="text-center">
-          {% if p.category == 'WARDROBE' %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zM12 3v18"/></svg>
-          {% elif p.category == 'TABLE' %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7h16M4 7v10M20 7v10M7 7v10M17 7v10"/></svg>
-          {% elif p.category == 'SOFA' %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 9V7a2 2 0 00-2-2H6a2 2 0 00-2 2v2M4 17h16M4 12h16m-16 5v2m16-2v2M6 12v5m12-5v5"/></svg>
-          {% elif p.category == 'BED' %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v11m0-4h18m0-7v11M7 10h10M7 7h10"/></svg>
-          {% elif p.category == 'KITCHEN' %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4h16v16H4V4zm4 4v2m8-2v2M4 12h16"/></svg>
-          {% else %}
-          <svg class="w-12 h-12 mx-auto opacity-40" style="color:#173B35;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-          {% endif %}
-          <div class="text-xs font-medium mt-1 opacity-60" style="color:#173B35;">{{ p.get_category_display }}</div>
+      {% if p.category == 'WARDROBE' %}
+        <img src="https://images.unsplash.com/photo-1781473377372-8690a514c152?auto=format&fit=crop&w=1000&q=80" alt="{{ p.name }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+      {% elif p.category == 'BED' %}
+        <img src="https://images.unsplash.com/photo-1778313878852-1bbe70eae16b?auto=format&fit=crop&w=1000&q=80" alt="{{ p.name }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+      {% elif p.category == 'SOFA' %}
+        <img src="https://images.unsplash.com/photo-1791388490412-621c2b5e6a13?auto=format&fit=crop&w=1000&q=80" alt="{{ p.name }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+      {% elif p.category == 'TABLE' %}
+        <img src="https://images.unsplash.com/photo-1745794621090-d856c53b0cc2?auto=format&fit=crop&w=1000&q=80" alt="{{ p.name }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+      {% elif p.category == 'KITCHEN' %}
+        <img src="https://images.unsplash.com/photo-1765274993134-0cd145a53485?auto=format&fit=crop&w=1000&q=80" alt="{{ p.name }}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+      {% else %}
+        <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-emerald-100">
+          <span class="text-sm font-semibold text-emerald-900">{{ p.get_category_display }}</span>
         </div>
-      </div>
+      {% endif %}
       {% endif %}
     </div>
     <div class="p-4">
