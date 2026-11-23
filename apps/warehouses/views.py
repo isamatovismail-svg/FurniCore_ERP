@@ -596,10 +596,14 @@ def scanner_lookup(request):
         return JsonResponse({'found': False, 'error': 'Пустой штрихкод'})
 
     # Очистка возможных префиксов системы
-    clean_code = code.replace('FURNICORE:MATERIAL:', '').replace('FURNICORE:PRODUCT:', '').replace('FURNICORE:', '')
+    clean_code = code.strip()
+    # Accept both plain SKU values and the prefixes printed on FurniCore labels.
+    for prefix in ('FURNICORE:MATERIAL:', 'FURNICORE:PRODUCT:', 'FURNICORE:', 'FC-MAT-', 'FC-PRD-'):
+        if clean_code.upper().startswith(prefix):
+            clean_code = clean_code[len(prefix):]
+            break
     if ':' in clean_code:
-        parts = clean_code.split(':')
-        clean_code = parts[0]
+        clean_code = clean_code.split(':', 1)[0]
 
     # 1. Поиск в материалах (WH-1)
     material = Material.objects.filter(
